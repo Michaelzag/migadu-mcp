@@ -41,9 +41,10 @@ def register_alias_tools(mcp: FastMCP):
             JSON object with alias summary and statistics to prevent context overflow
         """
         from migadu_mcp.config import get_config
+
         config = get_config()
         domain = config.get_default_domain()
-        
+
         factory = get_service_factory()
         service = factory.alias_service()
         result = await service.list_aliases(domain)

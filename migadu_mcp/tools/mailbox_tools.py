@@ -66,9 +66,10 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object with mailbox summary and statistics to prevent context overflow
         """
         from migadu_mcp.config import get_config
+
         config = get_config()
         domain = config.get_default_domain()
-        
+
         await log_operation_start(ctx, "Listing mailboxes for default domain", domain)
         try:
             service = get_service_factory().mailbox_service()
@@ -132,11 +133,14 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object with complete mailbox configuration and status information
         """
         from migadu_mcp.config import get_config
+
         config = get_config()
         domain = config.get_default_domain()
         email_address = f"{local_part}@{domain}"
-        
-        await log_operation_start(ctx, "Retrieving mailbox details for default domain", email_address)
+
+        await log_operation_start(
+            ctx, "Retrieving mailbox details for default domain", email_address
+        )
         try:
             service = get_service_factory().mailbox_service()
             result = await service.get_mailbox(domain, local_part)
@@ -188,7 +192,13 @@ def register_mailbox_tools(mcp: FastMCP):
         try:
             service = get_service_factory().mailbox_service()
             result = await service.create_mailbox(
-                domain, local_part, name, password, password_recovery_email, is_internal, forwarding_to
+                domain,
+                local_part,
+                name,
+                password,
+                password_recovery_email,
+                is_internal,
+                forwarding_to,
             )
             await log_operation_success(ctx, "Created mailbox", email_address)
             if forwarding_to:
@@ -235,15 +245,24 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object with newly created mailbox configuration
         """
         from migadu_mcp.config import get_config
+
         config = get_config()
         domain = config.get_default_domain()
         email_address = f"{local_part}@{domain}"
-        
-        await log_operation_start(ctx, "Creating mailbox on default domain", f"{email_address} ({name})")
+
+        await log_operation_start(
+            ctx, "Creating mailbox on default domain", f"{email_address} ({name})"
+        )
         try:
             service = get_service_factory().mailbox_service()
             result = await service.create_mailbox(
-                domain, local_part, name, password, password_recovery_email, is_internal, forwarding_to
+                domain,
+                local_part,
+                name,
+                password,
+                password_recovery_email,
+                is_internal,
+                forwarding_to,
             )
             await log_operation_success(ctx, "Created mailbox", email_address)
             if forwarding_to:
@@ -300,10 +319,19 @@ def register_mailbox_tools(mcp: FastMCP):
         try:
             service = get_service_factory().mailbox_service()
             result = await service.update_mailbox(
-                domain, local_part, name, may_send, may_receive,
-                may_access_imap, may_access_pop3, spam_action, spam_aggressiveness
+                domain,
+                local_part,
+                name,
+                may_send,
+                may_receive,
+                may_access_imap,
+                may_access_pop3,
+                spam_action,
+                spam_aggressiveness,
             )
-            await log_operation_success(ctx, "Updated mailbox configuration", email_address)
+            await log_operation_success(
+                ctx, "Updated mailbox configuration", email_address
+            )
             return result
         except Exception as e:
             await log_operation_error(ctx, "Update mailbox", email_address, str(e))
@@ -318,7 +346,9 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def delete_mailbox(ctx: Context, domain: str, local_part: str) -> Dict[str, Any]:
+    async def delete_mailbox(
+        ctx: Context, domain: str, local_part: str
+    ) -> Dict[str, Any]:
         """Permanently delete a mailbox and all its stored messages. This action is irreversible and will
         remove the email account, all stored emails, settings, and associated data. The email address
         becomes available for reuse after deletion. Use with caution as this cannot be undone.
@@ -334,7 +364,9 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object confirming deletion (may show 500 error despite success)
         """
         email_address = f"{local_part}@{domain}"
-        await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting mailbox {email_address} - this cannot be undone!")
+        await ctx.warning(
+            f"🗑️ DESTRUCTIVE: Deleting mailbox {email_address} - this cannot be undone!"
+        )
         try:
             service = get_service_factory().mailbox_service()
             result = await service.delete_mailbox(domain, local_part)
@@ -342,7 +374,9 @@ def register_mailbox_tools(mcp: FastMCP):
             return result
         except Exception as e:
             if "500" in str(e) or "Internal Server Error" in str(e):
-                await ctx.info(f"ℹ️ Note: Migadu API often returns 500 errors for successful deletions. Please verify if {email_address} was actually deleted.")
+                await ctx.info(
+                    f"ℹ️ Note: Migadu API often returns 500 errors for successful deletions. Please verify if {email_address} was actually deleted."
+                )
             await log_operation_error(ctx, "Delete mailbox", email_address, str(e))
             raise
 
@@ -355,7 +389,9 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def bulk_delete_mailboxes(ctx: Context, domain: str, local_parts: List[str]) -> Dict[str, Any]:
+    async def bulk_delete_mailboxes(
+        ctx: Context, domain: str, local_parts: List[str]
+    ) -> Dict[str, Any]:
         """Delete multiple mailboxes in one operation with intelligent error handling. This function
         automatically handles the Migadu API bug where successful deletions return HTTP 500 errors.
         Provides detailed results showing which mailboxes were deleted, which were already gone, and
@@ -369,7 +405,9 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object with arrays: deleted, already_gone, failed, and total_requested count
         """
         total = len(local_parts)
-        await log_operation_start(ctx, "Starting bulk deletion", f"{total} mailboxes from {domain}")
+        await log_operation_start(
+            ctx, "Starting bulk deletion", f"{total} mailboxes from {domain}"
+        )
         try:
             service = get_service_factory().mailbox_service()
             await ctx.report_progress(0, total)
@@ -380,9 +418,13 @@ def register_mailbox_tools(mcp: FastMCP):
             failed_count = len(result.get("failed", []))
             already_gone_count = len(result.get("already_gone", []))
 
-            await ctx.info(f"✅ Bulk deletion completed: {deleted_count} deleted, {already_gone_count} already gone, {failed_count} failed")
+            await ctx.info(
+                f"✅ Bulk deletion completed: {deleted_count} deleted, {already_gone_count} already gone, {failed_count} failed"
+            )
             if failed_count > 0:
-                await ctx.warning(f"⚠️ {failed_count} mailboxes failed to delete - check the 'failed' array in response")
+                await ctx.warning(
+                    f"⚠️ {failed_count} mailboxes failed to delete - check the 'failed' array in response"
+                )
             return result
         except Exception as e:
             await log_operation_error(ctx, "Bulk delete mailboxes", domain, str(e))
@@ -397,7 +439,9 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def reset_mailbox_password(ctx: Context, domain: str, local_part: str, new_password: str) -> Dict[str, Any]:
+    async def reset_mailbox_password(
+        ctx: Context, domain: str, local_part: str, new_password: str
+    ) -> Dict[str, Any]:
         """Change the authentication password for an existing mailbox. The new password will be required
         for IMAP, POP3, SMTP authentication, and webmail access. Use this for password recovery, security
         updates, or when users forget their credentials. The change takes effect immediately.
@@ -414,7 +458,9 @@ def register_mailbox_tools(mcp: FastMCP):
         await log_operation_start(ctx, "Resetting password", email_address)
         try:
             service = get_service_factory().mailbox_service()
-            result = await service.reset_mailbox_password(domain, local_part, new_password)
+            result = await service.reset_mailbox_password(
+                domain, local_part, new_password
+            )
             await log_operation_success(ctx, "Reset password", email_address)
             return result
         except Exception as e:
@@ -455,7 +501,9 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object confirming autoresponder configuration
         """
         service = get_service_factory().mailbox_service()
-        return await service.set_autoresponder(domain, local_part, active, subject, body, expires_on)
+        return await service.set_autoresponder(
+            domain, local_part, active, subject, body, expires_on
+        )
 
     @mcp.tool(
         tags={"mailbox", "forwarding", "read"},
@@ -466,7 +514,9 @@ def register_mailbox_tools(mcp: FastMCP):
         },
     )
     @with_context_protection(max_tokens=2000)
-    async def list_forwardings(domain: str, mailbox: str, ctx: Context) -> Dict[str, Any]:
+    async def list_forwardings(
+        domain: str, mailbox: str, ctx: Context
+    ) -> Dict[str, Any]:
         """Retrieve all external forwarding rules configured for a mailbox. Returns a summary with
         statistics and sample forwardings to avoid context explosion. Forwardings automatically send
         copies of incoming messages to external email addresses. Use get_forwarding() for detailed info.
@@ -499,7 +549,9 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def create_forwarding(domain: str, mailbox: str, address: str) -> Dict[str, Any]:
+    async def create_forwarding(
+        domain: str, mailbox: str, address: str
+    ) -> Dict[str, Any]:
         """Create a new external forwarding rule for a mailbox. This sends copies of incoming messages
         to the specified external email address. Migadu will send a confirmation email to the destination
         address that must be confirmed before forwarding becomes active. Use this to route messages to
@@ -574,7 +626,9 @@ def register_mailbox_tools(mcp: FastMCP):
             JSON object with updated forwarding configuration
         """
         service = get_service_factory().mailbox_service()
-        return await service.update_forwarding(domain, mailbox, address, is_active, expires_on, remove_upon_expiry)
+        return await service.update_forwarding(
+            domain, mailbox, address, is_active, expires_on, remove_upon_expiry
+        )
 
     @mcp.tool(
         tags={"mailbox", "forwarding", "delete"},
@@ -585,7 +639,9 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def delete_forwarding(domain: str, mailbox: str, address: str) -> Dict[str, Any]:
+    async def delete_forwarding(
+        domain: str, mailbox: str, address: str
+    ) -> Dict[str, Any]:
         """Permanently remove an external forwarding rule from a mailbox. Messages will no longer be
         forwarded to the specified external address. This action is immediate and cannot be undone.
         Use this to clean up old forwarding rules or stop unwanted message routing.

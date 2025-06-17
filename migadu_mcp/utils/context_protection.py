@@ -18,7 +18,7 @@ async def truncate_response_if_needed(
     data: Dict[str, Any],
     ctx: Optional[Context] = None,
     tool_name: str = "unknown",
-    max_tokens: int = 2000
+    max_tokens: int = 2000,
 ) -> Dict[str, Any]:
     """
     Advanced context protection with AI-powered guidance messages
@@ -39,7 +39,9 @@ async def truncate_response_if_needed(
 
     # Log the truncation for transparency
     if ctx:
-        await ctx.info(f"🛡️ Response protection: {estimated_tokens} tokens → truncating to prevent context overflow")
+        await ctx.info(
+            f"🛡️ Response protection: {estimated_tokens} tokens → truncating to prevent context overflow"
+        )
 
     # If it's a list response, convert to intelligent summary
     if isinstance(data, dict):
@@ -48,7 +50,9 @@ async def truncate_response_if_needed(
                 return await _create_intelligent_list_summary(data, key, ctx, tool_name)
 
     # For other large responses, try to extract key summary info
-    return await _create_intelligent_generic_summary(data, estimated_tokens, max_tokens, ctx, tool_name)
+    return await _create_intelligent_generic_summary(
+        data, estimated_tokens, max_tokens, ctx, tool_name
+    )
 
 
 def _create_list_summary(data: Dict[str, Any], list_key: str) -> Dict[str, Any]:
@@ -215,7 +219,7 @@ async def _create_intelligent_list_summary(
     data: Dict[str, Any],
     list_key: str,
     ctx: Optional[Context] = None,
-    tool_name: str = "unknown"
+    tool_name: str = "unknown",
 ) -> Dict[str, Any]:
     """Create AI-powered intelligent summary for list-based responses"""
     items = data[list_key]
@@ -225,19 +229,19 @@ async def _create_intelligent_list_summary(
 
     # Get basic summary data
     basic_summary = _get_basic_list_summary(items, list_key)
-    
+
     # Generate intelligent guidance message using AI sampling
     intelligent_guidance = await _generate_intelligent_guidance(
         items, list_key, tool_name, ctx
     )
-    
+
     summary = {
         f"{list_key}_summary": {
             "total_count": len(items),
             "estimated_tokens": estimate_token_count(data),
             "truncated": True,
             "intelligent_guidance": intelligent_guidance,
-            **basic_summary
+            **basic_summary,
         }
     }
 
@@ -255,10 +259,10 @@ async def _create_intelligent_generic_summary(
     estimated_tokens: int,
     max_tokens: int,
     ctx: Optional[Context] = None,
-    tool_name: str = "unknown"
+    tool_name: str = "unknown",
 ) -> Dict[str, Any]:
     """Create intelligent summary for non-list responses"""
-    
+
     # Generate context-aware guidance
     if ctx:
         prompt = f"""
@@ -270,7 +274,7 @@ async def _create_intelligent_generic_summary(
         2. Specific guidance on how to get the information they need
         3. Keep it actionable and user-friendly (not technical)
         """
-        
+
         try:
             smart_message = await ctx.sample(prompt, model_preferences="claude-3-haiku")
             guidance = _extract_text_from_sampling_response(smart_message)
@@ -285,7 +289,9 @@ async def _create_intelligent_generic_summary(
             "max_allowed": max_tokens,
             "truncated": True,
             "intelligent_guidance": guidance,
-            "data_keys": list(data.keys()) if isinstance(data, dict) else ["non_dict_response"],
+            "data_keys": list(data.keys())
+            if isinstance(data, dict)
+            else ["non_dict_response"],
         }
     }
 
@@ -294,13 +300,13 @@ async def _generate_intelligent_guidance(
     items: List[Dict[str, Any]],
     list_key: str,
     tool_name: str,
-    ctx: Optional[Context] = None
+    ctx: Optional[Context] = None,
 ) -> str:
     """Generate AI-powered, context-aware guidance messages"""
-    
+
     if not ctx:
         return _get_fallback_guidance(list_key, len(items))
-    
+
     # Extract sample data for context
     sample_addresses = []
     for item in items[:3]:
@@ -308,7 +314,7 @@ async def _generate_intelligent_guidance(
             sample_addresses.append(item["address"])
         elif "local_part" in item and "domain_name" in item:
             sample_addresses.append(f"{item['local_part']}@{item['domain_name']}")
-    
+
     # Create smart prompt based on the tool and data
     prompt = f"""
     User called {tool_name} and got {len(items)} {list_key} back (too many for context).
@@ -322,7 +328,7 @@ async def _generate_intelligent_guidance(
     
     Example format: "Found 87 mailboxes. For complete details, use: get_my_mailbox('admin') or get_my_mailbox('michael')"
     """
-    
+
     try:
         smart_message = await ctx.sample(prompt, model_preferences="claude-3-haiku")
         return _extract_text_from_sampling_response(smart_message)
@@ -350,13 +356,13 @@ def _extract_text_from_sampling_response(response) -> str:
     """Safely extract text from FastMCP sampling response"""
     try:
         # Try different response formats
-        if hasattr(response, 'text'):
+        if hasattr(response, "text"):
             return str(response.text).strip()
-        elif hasattr(response, 'content') and response.content:
+        elif hasattr(response, "content") and response.content:
             # If it's a list of content objects
             if isinstance(response.content, list) and len(response.content) > 0:
                 first_content = response.content[0]
-                if hasattr(first_content, 'text'):
+                if hasattr(first_content, "text"):
                     return str(first_content.text).strip()
         # Fallback to string conversion
         return str(response).strip()
@@ -364,7 +370,9 @@ def _extract_text_from_sampling_response(response) -> str:
         return "Response summarized due to size limitations."
 
 
-def _get_basic_list_summary(items: List[Dict[str, Any]], list_key: str) -> Dict[str, Any]:
+def _get_basic_list_summary(
+    items: List[Dict[str, Any]], list_key: str
+) -> Dict[str, Any]:
     """Get basic statistical summary for different item types"""
     if list_key == "mailboxes":
         return _summarize_mailboxes(items)
