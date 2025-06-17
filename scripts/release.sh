@@ -35,32 +35,17 @@ uv build
 
 echo "✅ All checks passed! Creating release..."
 git add migadu_mcp/__init__.py pyproject.toml migadu_mcp/ .github/ scripts/ uv.lock
-# Add RELEASE_NOTES.md if it exists
-if [ -f "RELEASE_NOTES.md" ]; then
-    git add RELEASE_NOTES.md
-fi
 git commit -m "v$VERSION: Release with quality checks and fixes"
 git tag "v$VERSION"
 git push origin master
 git push --tags
 
-echo "🚀 Creating GitHub release..."
-
-# Check if release notes file exists
-if [ -f "RELEASE_NOTES.md" ]; then
-    echo "📝 Using custom release notes from RELEASE_NOTES.md"
-    gh release create "v$VERSION" \
-      --title "v$VERSION" \
-      --notes-file "RELEASE_NOTES.md"
-    rm "RELEASE_NOTES.md"  # Clean up after use
-else
-    echo "📝 Auto-generating release notes from commits and PRs"
-    gh release create "v$VERSION" \
-      --title "v$VERSION" \
-      --generate-notes
-fi
-
-echo "🎉 Release $VERSION completed successfully!"
-echo "Monitor the build at: https://github.com/Michaelzag/migadu-mcp/actions"
+echo "🎉 Build and tag $VERSION completed successfully!"
 echo ""
-echo "💡 Tip: For custom release notes, create RELEASE_NOTES.md before running the script"
+echo "📋 Next steps:"
+echo "1. Create GitHub release manually at: https://github.com/Michaelzag/migadu-mcp/releases/new"
+echo "2. Select tag: v$VERSION"
+echo "3. Add release notes describing the changes"
+echo "4. Publish the release"
+echo ""
+echo "Monitor the build at: https://github.com/Michaelzag/migadu-mcp/actions"
