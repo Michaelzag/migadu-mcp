@@ -13,7 +13,6 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    if: github.event_name != 'release'
     strategy:
       matrix:
         python-version: ["3.13"]
@@ -41,7 +40,6 @@ jobs:
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
-    if: github.event_name != 'release'
 
     steps:
     - name: Checkout code
@@ -72,7 +70,6 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    if: github.event_name != 'release'
 
     steps:
     - name: Checkout code
@@ -109,6 +106,7 @@ jobs:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
+    needs: [test, lint, security]
     environment: pypi
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
