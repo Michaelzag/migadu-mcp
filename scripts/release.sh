@@ -27,14 +27,8 @@ uv run pytest tests/ -v
 echo "🔒 Security scan..."
 uv run bandit -r migadu_mcp/
 
-echo "🧹 Cleaning build artifacts..."
-rm -rf dist/ build/ *.egg-info/
-
-echo "🏗️ Building package..."
-uv build
-
 echo "✅ All checks passed! Creating release..."
-git add migadu_mcp/__init__.py pyproject.toml migadu_mcp/ .github/ scripts/ uv.lock
+git add migadu_mcp/__init__.py pyproject.toml migadu_mcp/ .github/ scripts/ uv.lock README.md
 git commit -m "v$VERSION: Release with quality checks and fixes"
 git tag "v$VERSION"
 git push origin master

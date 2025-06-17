@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/migadu-mcp?style=for-the-badge)](https://pypi.org/project/migadu-mcp/)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg?style=for-the-badge)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/Michaelzag/migadu-mcp/workflows/CI/badge.svg?style=for-the-badge)](https://github.com/Michaelzag/migadu-mcp/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://github.com/Michaelzag/migadu-mcp/workflows/CI%2FCD%20Pipeline/badge.svg?style=for-the-badge)](https://github.com/Michaelzag/migadu-mcp/actions/workflows/main.yml)
 
 Control your Migadu email hosting through AI assistants using the Model Context Protocol (MCP).
 
