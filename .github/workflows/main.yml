@@ -105,6 +105,7 @@ jobs:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
+    environment: pypi
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
       contents: read
