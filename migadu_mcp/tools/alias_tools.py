@@ -4,7 +4,7 @@ MCP tools for alias operations
 """
 
 from typing import Dict, Any, List
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from migadu_mcp.services.service_factory import get_service_factory
 from migadu_mcp.utils.context_protection import truncate_response_if_needed
 
@@ -28,8 +28,28 @@ def register_alias_tools(mcp: FastMCP):
         service = factory.alias_service()
         result = await service.list_aliases(domain)
 
-        # Apply context protection to prevent AI context explosion
-        return truncate_response_if_needed(result, max_tokens=2000)
+        # Apply context protection to prevent context explosion
+        return await truncate_response_if_needed(result, max_tokens=2000)
+
+    @mcp.tool
+    async def list_my_aliases(ctx: Context) -> Dict[str, Any]:
+        """Retrieve all email aliases configured for your default domain. Returns a summary with statistics
+        and sample aliases to avoid context explosion. Aliases are email addresses that automatically forward
+        incoming messages without storing them. Use get_alias() for detailed individual alias info.
+
+        Returns:
+            JSON object with alias summary and statistics to prevent context overflow
+        """
+        from migadu_mcp.config import get_config
+        config = get_config()
+        domain = config.get_default_domain()
+        
+        factory = get_service_factory()
+        service = factory.alias_service()
+        result = await service.list_aliases(domain)
+
+        # Apply context protection to prevent context explosion
+        return await truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool
     async def create_alias(

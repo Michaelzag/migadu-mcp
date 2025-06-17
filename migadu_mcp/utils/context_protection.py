@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Context protection utilities to prevent AI context explosion
+Advanced context protection utilities with AI-powered guidance
 """
 
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from fastmcp import Context
 
 
 def estimate_token_count(data: Any) -> int:
@@ -13,32 +14,41 @@ def estimate_token_count(data: Any) -> int:
     return len(json_str) // 4
 
 
-def truncate_response_if_needed(
-    data: Dict[str, Any], max_tokens: int = 2000
+async def truncate_response_if_needed(
+    data: Dict[str, Any],
+    ctx: Optional[Context] = None,
+    tool_name: str = "unknown",
+    max_tokens: int = 2000
 ) -> Dict[str, Any]:
     """
-    Truncate response if it would exceed max_tokens, converting to summary format
+    Advanced context protection with AI-powered guidance messages
 
     Args:
         data: Response data to check
+        ctx: FastMCP Context for sampling and logging
+        tool_name: Name of the tool being called for context-aware guidance
         max_tokens: Maximum tokens allowed (default: 2000)
 
     Returns:
-        Original data if under limit, or truncated summary if over limit
+        Original data if under limit, or intelligent summary if over limit
     """
     estimated_tokens = estimate_token_count(data)
 
     if estimated_tokens <= max_tokens:
         return data
 
-    # If it's a list response, convert to summary
+    # Log the truncation for transparency
+    if ctx:
+        await ctx.info(f"🛡️ Response protection: {estimated_tokens} tokens → truncating to prevent context overflow")
+
+    # If it's a list response, convert to intelligent summary
     if isinstance(data, dict):
         for key in ["mailboxes", "aliases", "identities", "forwardings", "rewrites"]:
             if key in data and isinstance(data[key], list):
-                return _create_list_summary(data, key)
+                return await _create_intelligent_list_summary(data, key, ctx, tool_name)
 
     # For other large responses, try to extract key summary info
-    return _create_generic_summary(data, estimated_tokens, max_tokens)
+    return await _create_intelligent_generic_summary(data, estimated_tokens, max_tokens, ctx, tool_name)
 
 
 def _create_list_summary(data: Dict[str, Any], list_key: str) -> Dict[str, Any]:
@@ -199,3 +209,172 @@ def _create_generic_summary(
             "suggestion": "Use more specific queries to get targeted information",
         }
     }
+
+
+async def _create_intelligent_list_summary(
+    data: Dict[str, Any],
+    list_key: str,
+    ctx: Optional[Context] = None,
+    tool_name: str = "unknown"
+) -> Dict[str, Any]:
+    """Create AI-powered intelligent summary for list-based responses"""
+    items = data[list_key]
+
+    if not items:
+        return data
+
+    # Get basic summary data
+    basic_summary = _get_basic_list_summary(items, list_key)
+    
+    # Generate intelligent guidance message using AI sampling
+    intelligent_guidance = await _generate_intelligent_guidance(
+        items, list_key, tool_name, ctx
+    )
+    
+    summary = {
+        f"{list_key}_summary": {
+            "total_count": len(items),
+            "estimated_tokens": estimate_token_count(data),
+            "truncated": True,
+            "intelligent_guidance": intelligent_guidance,
+            **basic_summary
+        }
+    }
+
+    # Include sample items for reference
+    if len(items) > 0:
+        summary["sample_items"] = items[:3]  # Show first 3 as examples
+        if len(items) > 3:
+            summary[f"{list_key}_summary"]["remaining_count"] = len(items) - 3
+
+    return summary
+
+
+async def _create_intelligent_generic_summary(
+    data: Dict[str, Any],
+    estimated_tokens: int,
+    max_tokens: int,
+    ctx: Optional[Context] = None,
+    tool_name: str = "unknown"
+) -> Dict[str, Any]:
+    """Create intelligent summary for non-list responses"""
+    
+    # Generate context-aware guidance
+    if ctx:
+        prompt = f"""
+        A {tool_name} API call returned {estimated_tokens} tokens (over {max_tokens} limit).
+        Data keys: {list(data.keys()) if isinstance(data, dict) else ["non_dict_response"]}
+        
+        Generate a helpful, professional message explaining:
+        1. What was returned and why it's truncated
+        2. Specific guidance on how to get the information they need
+        3. Keep it actionable and user-friendly (not technical)
+        """
+        
+        try:
+            smart_message = await ctx.sample(prompt, model_preferences="claude-3-haiku")
+            guidance = _extract_text_from_sampling_response(smart_message)
+        except Exception:
+            guidance = "Response was too large and has been summarized. Use more specific queries to get detailed information."
+    else:
+        guidance = "Response was too large and has been summarized. Use more specific queries to get detailed information."
+
+    return {
+        "response_summary": {
+            "estimated_tokens": estimated_tokens,
+            "max_allowed": max_tokens,
+            "truncated": True,
+            "intelligent_guidance": guidance,
+            "data_keys": list(data.keys()) if isinstance(data, dict) else ["non_dict_response"],
+        }
+    }
+
+
+async def _generate_intelligent_guidance(
+    items: List[Dict[str, Any]],
+    list_key: str,
+    tool_name: str,
+    ctx: Optional[Context] = None
+) -> str:
+    """Generate AI-powered, context-aware guidance messages"""
+    
+    if not ctx:
+        return _get_fallback_guidance(list_key, len(items))
+    
+    # Extract sample data for context
+    sample_addresses = []
+    for item in items[:3]:
+        if "address" in item:
+            sample_addresses.append(item["address"])
+        elif "local_part" in item and "domain_name" in item:
+            sample_addresses.append(f"{item['local_part']}@{item['domain_name']}")
+    
+    # Create smart prompt based on the tool and data
+    prompt = f"""
+    User called {tool_name} and got {len(items)} {list_key} back (too many for context).
+    Sample addresses: {sample_addresses[:3]}
+    
+    Generate a helpful, professional response that:
+    1. Explains what was found ({len(items)} {list_key})
+    2. Shows specific examples of how to get details using REAL addresses from the data
+    3. Uses the correct function names (get_my_mailbox, get_mailbox, get_alias, etc.)
+    4. Keep it concise, actionable, and friendly
+    
+    Example format: "Found 87 mailboxes. For complete details, use: get_my_mailbox('admin') or get_my_mailbox('michael')"
+    """
+    
+    try:
+        smart_message = await ctx.sample(prompt, model_preferences="claude-3-haiku")
+        return _extract_text_from_sampling_response(smart_message)
+    except Exception:
+        return _get_fallback_guidance(list_key, len(items))
+
+
+def _get_fallback_guidance(list_key: str, count: int) -> str:
+    """Fallback guidance when AI sampling is not available"""
+    if list_key == "mailboxes":
+        return f"Found {count} mailboxes. Use get_my_mailbox('username') for complete mailbox details."
+    elif list_key == "aliases":
+        return f"Found {count} aliases. Use get_alias('aliasname') for complete forwarding rules."
+    elif list_key == "identities":
+        return f"Found {count} identities. Use get_identity('identityname') for complete permissions."
+    elif list_key == "forwardings":
+        return f"Found {count} forwardings. Use get_forwarding() for complete status details."
+    elif list_key == "rewrites":
+        return f"Found {count} rewrite rules. Use get_rewrite() for complete pattern details."
+    else:
+        return f"Found {count} {list_key}. Use specific get_ commands for detailed information."
+
+
+def _extract_text_from_sampling_response(response) -> str:
+    """Safely extract text from FastMCP sampling response"""
+    try:
+        # Try different response formats
+        if hasattr(response, 'text'):
+            return str(response.text).strip()
+        elif hasattr(response, 'content') and response.content:
+            # If it's a list of content objects
+            if isinstance(response.content, list) and len(response.content) > 0:
+                first_content = response.content[0]
+                if hasattr(first_content, 'text'):
+                    return str(first_content.text).strip()
+        # Fallback to string conversion
+        return str(response).strip()
+    except Exception:
+        return "Response summarized due to size limitations."
+
+
+def _get_basic_list_summary(items: List[Dict[str, Any]], list_key: str) -> Dict[str, Any]:
+    """Get basic statistical summary for different item types"""
+    if list_key == "mailboxes":
+        return _summarize_mailboxes(items)
+    elif list_key == "aliases":
+        return _summarize_aliases(items)
+    elif list_key == "identities":
+        return _summarize_identities(items)
+    elif list_key == "forwardings":
+        return _summarize_forwardings(items)
+    elif list_key == "rewrites":
+        return _summarize_rewrites(items)
+    else:
+        return {"total_items": len(items)}
