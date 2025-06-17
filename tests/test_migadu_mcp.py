@@ -153,7 +153,11 @@ class TestMigaduMCPIntegration:
                 assert result[0] is not None
             except Exception as e:
                 # If no valid credentials, should get a configuration error
-                assert "migadu_email" in str(e).lower() or "api_key" in str(e).lower() or "migadu_domain" in str(e).lower()
+                assert (
+                    "migadu_email" in str(e).lower()
+                    or "api_key" in str(e).lower()
+                    or "migadu_domain" in str(e).lower()
+                )
 
     @pytest.mark.integration
     async def test_read_mailboxes_resource(self, mcp_server):

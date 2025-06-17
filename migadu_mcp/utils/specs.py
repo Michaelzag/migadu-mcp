@@ -8,7 +8,9 @@ from dataclasses import dataclass
 
 
 # Operation types for each entity
-MailboxOperation = Literal["create", "update", "delete", "reset_password", "set_autoresponder"]
+MailboxOperation = Literal[
+    "create", "update", "delete", "reset_password", "set_autoresponder"
+]
 AliasOperation = Literal["create", "update", "delete"]
 IdentityOperation = Literal["create", "update", "delete"]
 RewriteOperation = Literal["create", "update", "delete"]
@@ -18,6 +20,7 @@ ForwardingOperation = Literal["create", "update", "delete"]
 @dataclass
 class MailboxCreateSpec:
     """Create a new mailbox"""
+
     target: str  # Email address or local part
     name: str  # Display name
     operation: Literal["create"] = "create"
@@ -30,6 +33,7 @@ class MailboxCreateSpec:
 @dataclass
 class MailboxUpdateSpec:
     """Update mailbox settings"""
+
     target: str
     operation: Literal["update"] = "update"
     name: Optional[str] = None
@@ -44,6 +48,7 @@ class MailboxUpdateSpec:
 @dataclass
 class MailboxDeleteSpec:
     """Delete a mailbox"""
+
     target: str
     operation: Literal["delete"] = "delete"
 
@@ -51,6 +56,7 @@ class MailboxDeleteSpec:
 @dataclass
 class MailboxPasswordResetSpec:
     """Reset mailbox password"""
+
     target: str
     new_password: str
     operation: Literal["reset_password"] = "reset_password"
@@ -59,6 +65,7 @@ class MailboxPasswordResetSpec:
 @dataclass
 class MailboxAutoresponderSpec:
     """Configure mailbox autoresponder"""
+
     target: str
     active: bool
     operation: Literal["set_autoresponder"] = "set_autoresponder"
@@ -70,6 +77,7 @@ class MailboxAutoresponderSpec:
 @dataclass
 class AliasCreateSpec:
     """Create a new alias"""
+
     target: str  # Local part
     destinations: List[str]
     operation: Literal["create"] = "create"
@@ -80,6 +88,7 @@ class AliasCreateSpec:
 @dataclass
 class AliasUpdateSpec:
     """Update alias destinations"""
+
     target: str
     destinations: List[str]
     operation: Literal["update"] = "update"
@@ -89,6 +98,7 @@ class AliasUpdateSpec:
 @dataclass
 class AliasDeleteSpec:
     """Delete an alias"""
+
     target: str
     operation: Literal["delete"] = "delete"
     domain: Optional[str] = None
@@ -97,6 +107,7 @@ class AliasDeleteSpec:
 @dataclass
 class IdentityCreateSpec:
     """Create a new identity"""
+
     target: str  # Local part of identity
     mailbox: str  # Owner mailbox
     name: str
@@ -108,6 +119,7 @@ class IdentityCreateSpec:
 @dataclass
 class IdentityUpdateSpec:
     """Update identity settings"""
+
     target: str
     mailbox: str
     operation: Literal["update"] = "update"
@@ -120,6 +132,7 @@ class IdentityUpdateSpec:
 @dataclass
 class IdentityDeleteSpec:
     """Delete an identity"""
+
     target: str
     mailbox: str
     operation: Literal["delete"] = "delete"
@@ -129,6 +142,7 @@ class IdentityDeleteSpec:
 @dataclass
 class RewriteCreateSpec:
     """Create a new rewrite rule"""
+
     name: str  # Rule identifier
     local_part_rule: str  # Pattern (e.g., 'demo-*')
     destinations: List[str]
@@ -139,6 +153,7 @@ class RewriteCreateSpec:
 @dataclass
 class RewriteUpdateSpec:
     """Update rewrite rule"""
+
     name: str
     operation: Literal["update"] = "update"
     domain: Optional[str] = None
@@ -150,6 +165,7 @@ class RewriteUpdateSpec:
 @dataclass
 class RewriteDeleteSpec:
     """Delete a rewrite rule"""
+
     name: str
     operation: Literal["delete"] = "delete"
     domain: Optional[str] = None
@@ -158,6 +174,7 @@ class RewriteDeleteSpec:
 @dataclass
 class ForwardingCreateSpec:
     """Create external forwarding"""
+
     mailbox: str
     address: str  # External email
     operation: Literal["create"] = "create"
@@ -167,6 +184,7 @@ class ForwardingCreateSpec:
 @dataclass
 class ForwardingUpdateSpec:
     """Update forwarding settings"""
+
     mailbox: str
     address: str
     operation: Literal["update"] = "update"
@@ -179,6 +197,7 @@ class ForwardingUpdateSpec:
 @dataclass
 class ForwardingDeleteSpec:
     """Delete forwarding rule"""
+
     mailbox: str
     address: str
     operation: Literal["delete"] = "delete"
@@ -188,35 +207,19 @@ class ForwardingDeleteSpec:
 # Union types for each manage_ tool
 MailboxSpec = Union[
     MailboxCreateSpec,
-    MailboxUpdateSpec, 
+    MailboxUpdateSpec,
     MailboxDeleteSpec,
     MailboxPasswordResetSpec,
-    MailboxAutoresponderSpec
+    MailboxAutoresponderSpec,
 ]
 
-AliasSpec = Union[
-    AliasCreateSpec,
-    AliasUpdateSpec,
-    AliasDeleteSpec
-]
+AliasSpec = Union[AliasCreateSpec, AliasUpdateSpec, AliasDeleteSpec]
 
-IdentitySpec = Union[
-    IdentityCreateSpec,
-    IdentityUpdateSpec,
-    IdentityDeleteSpec
-]
+IdentitySpec = Union[IdentityCreateSpec, IdentityUpdateSpec, IdentityDeleteSpec]
 
-RewriteSpec = Union[
-    RewriteCreateSpec,
-    RewriteUpdateSpec,
-    RewriteDeleteSpec
-]
+RewriteSpec = Union[RewriteCreateSpec, RewriteUpdateSpec, RewriteDeleteSpec]
 
-ForwardingSpec = Union[
-    ForwardingCreateSpec,
-    ForwardingUpdateSpec,
-    ForwardingDeleteSpec
-]
+ForwardingSpec = Union[ForwardingCreateSpec, ForwardingUpdateSpec, ForwardingDeleteSpec]
 
 # List or single item for each manage_ tool
 MailboxSpecs = Union[MailboxSpec, List[MailboxSpec]]

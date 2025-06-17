@@ -39,20 +39,21 @@ def register_mailbox_tools(mcp: FastMCP):
     @with_context_protection(max_tokens=2000)
     async def list_mailboxes(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
         """List all email mailboxes for a domain. Returns summary with statistics and samples.
-        
+
         Args:
             domain: Domain name (e.g., 'mydomain.org'). If not provided, uses MIGADU_DOMAIN.
-            
+
         Returns:
             JSON object with mailbox summary and statistics
         """
         if domain is None:
             from migadu_mcp.config import get_config
+
             config = get_config()
             domain = config.get_default_domain()
             if not domain:
                 raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
-        
+
         await log_operation_start(ctx, "Listing mailboxes", domain)
         try:
             service = get_service_factory().mailbox_service()
@@ -74,10 +75,10 @@ def register_mailbox_tools(mcp: FastMCP):
     )
     async def get_mailbox(target: str, ctx: Context) -> Dict[str, Any]:
         """Get detailed information about a specific mailbox with smart domain resolution.
-        
+
         Args:
             target: Email address (user@domain.com) or local part (user) if MIGADU_DOMAIN is set
-            
+
         Returns:
             JSON object with complete mailbox configuration
         """
@@ -85,7 +86,7 @@ def register_mailbox_tools(mcp: FastMCP):
             parsed = parse_email_target(target)
             domain, local_part = parsed[0]
             email_address = format_email_address(domain, local_part)
-            
+
             await log_operation_start(ctx, "Retrieving mailbox details", email_address)
             service = get_service_factory().mailbox_service()
             result = await service.get_mailbox(domain, local_part)
@@ -96,7 +97,9 @@ def register_mailbox_tools(mcp: FastMCP):
             raise
 
     @bulk_processor_with_schema(MailboxCreateRequest)
-    async def process_create_mailbox(validated_item: MailboxCreateRequest, ctx: Context) -> Dict[str, Any]:
+    async def process_create_mailbox(
+        validated_item: MailboxCreateRequest, ctx: Context
+    ) -> Dict[str, Any]:
         """Process a single mailbox creation with Pydantic validation"""
         # Use validated Pydantic model directly - all validation already done
         target = validated_item.target
@@ -105,27 +108,31 @@ def register_mailbox_tools(mcp: FastMCP):
         password_recovery_email = validated_item.password_recovery_email
         is_internal = validated_item.is_internal
         forwarding_to = validated_item.forwarding_to
-        
+
         # Parse target
         parsed = parse_email_target(target)
         domain, local_part = parsed[0]
         email_address = format_email_address(domain, local_part)
-        
+
         await log_operation_start(ctx, "Creating mailbox", f"{email_address} ({name})")
-        
+
         service = get_service_factory().mailbox_service()
         result = await service.create_mailbox(
-            domain, local_part, name,
-            password, password_recovery_email,
-            is_internal, forwarding_to
+            domain,
+            local_part,
+            name,
+            password,
+            password_recovery_email,
+            is_internal,
+            forwarding_to,
         )
-        
+
         await log_operation_success(ctx, "Created mailbox", email_address)
         if forwarding_to:
             await ctx.info(f"🔄 Configured forwarding to: {forwarding_to}")
         if is_internal:
             await ctx.info("🔒 Configured as internal-only mailbox")
-        
+
         return {"mailbox": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
@@ -137,9 +144,11 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def create_mailbox(mailboxes: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+    async def create_mailbox(
+        mailboxes: List[Dict[str, Any]], ctx: Context
+    ) -> Dict[str, Any]:
         """Create one or more email mailboxes with smart domain resolution.
-        
+
         Args:
             mailboxes: List of mailbox specifications. Each dict should contain:
                 - target: Email address or local part (required)
@@ -148,10 +157,10 @@ def register_mailbox_tools(mcp: FastMCP):
                 - password_recovery_email: Recovery email for invitation (optional)
                 - is_internal: Internal-only flag (optional, default: false)
                 - forwarding_to: External forwarding address (optional)
-            
+
         Returns:
             JSON object with created mailbox(es) information
-            
+
         Examples:
             Single: [{"target": "april", "name": "April Berry"}]
             Bulk: [
@@ -161,17 +170,19 @@ def register_mailbox_tools(mcp: FastMCP):
         """
         count = len(list(ensure_iterable(mailboxes)))
         await log_bulk_operation_start(ctx, "Creating", count, "mailbox")
-        
+
         result = await process_create_mailbox(mailboxes, ctx)
         await log_bulk_operation_result(ctx, "Mailbox creation", result, "mailbox")
         return result
 
     @bulk_processor
-    async def process_update_mailbox(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+    async def process_update_mailbox(
+        item: Dict[str, Any], ctx: Context
+    ) -> Dict[str, Any]:
         """Process a single mailbox update"""
         # Validate required fields
         validate_required_fields(item, ["target"], "update_mailbox")
-        
+
         # Extract fields with defaults
         target = item["target"]
         name = get_field_with_default(item, "name")
@@ -181,21 +192,27 @@ def register_mailbox_tools(mcp: FastMCP):
         may_access_pop3 = get_field_with_default(item, "may_access_pop3")
         spam_action = get_field_with_default(item, "spam_action")
         spam_aggressiveness = get_field_with_default(item, "spam_aggressiveness")
-        
+
         # Parse target
         parsed = parse_email_target(target)
         domain, local_part = parsed[0]
         email_address = format_email_address(domain, local_part)
-        
+
         await log_operation_start(ctx, "Updating mailbox", email_address)
-        
+
         service = get_service_factory().mailbox_service()
         result = await service.update_mailbox(
-            domain, local_part, name, may_send, may_receive,
-            may_access_imap, may_access_pop3, 
-            spam_action, spam_aggressiveness
+            domain,
+            local_part,
+            name,
+            may_send,
+            may_receive,
+            may_access_imap,
+            may_access_pop3,
+            spam_action,
+            spam_aggressiveness,
         )
-        
+
         await log_operation_success(ctx, "Updated mailbox", email_address)
         return {"mailbox": result, "email_address": email_address, "success": True}
 
@@ -208,9 +225,11 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def update_mailbox(updates: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+    async def update_mailbox(
+        updates: List[Dict[str, Any]], ctx: Context
+    ) -> Dict[str, Any]:
         """Update configuration settings for one or more mailboxes.
-        
+
         Args:
             updates: List of update specifications. Each dict should contain:
                 - target: Email address or local part (required)
@@ -221,10 +240,10 @@ def register_mailbox_tools(mcp: FastMCP):
                 - may_access_pop3: Allow/deny POP3 access (optional)
                 - spam_action: Spam handling ("folder", "reject", etc.) (optional)
                 - spam_aggressiveness: Spam filtering sensitivity (optional)
-            
+
         Returns:
             JSON object with updated mailbox configuration(s)
-            
+
         Examples:
             Single: [{"target": "april", "may_send": false}]
             Bulk: [
@@ -234,29 +253,31 @@ def register_mailbox_tools(mcp: FastMCP):
         """
         count = len(list(ensure_iterable(updates)))
         await log_bulk_operation_start(ctx, "Updating", count, "mailbox")
-        
+
         result = await process_update_mailbox(updates, ctx)
         await log_bulk_operation_result(ctx, "Mailbox update", result, "mailbox")
         return result
 
     @bulk_processor
-    async def process_delete_mailbox(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+    async def process_delete_mailbox(
+        item: Dict[str, Any], ctx: Context
+    ) -> Dict[str, Any]:
         """Process a single mailbox deletion"""
         # Validate required fields
         validate_required_fields(item, ["target"], "delete_mailbox")
-        
+
         target = item["target"]
-        
+
         # Parse target
         parsed = parse_email_target(target)
         domain, local_part = parsed[0]
         email_address = format_email_address(domain, local_part)
-        
+
         await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting mailbox {email_address}")
-        
+
         service = get_service_factory().mailbox_service()
         await service.delete_mailbox(domain, local_part)
-        
+
         await log_operation_success(ctx, "Deleted mailbox", email_address)
         return {"deleted": email_address, "success": True}
 
@@ -269,16 +290,18 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def delete_mailbox(targets: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+    async def delete_mailbox(
+        targets: List[Dict[str, Any]], ctx: Context
+    ) -> Dict[str, Any]:
         """Delete one or more mailboxes with smart domain resolution.
-        
+
         Args:
             targets: List of deletion specifications. Each dict should contain:
                 - target: Email address or local part (required)
-            
+
         Returns:
             JSON object with deletion results
-            
+
         Examples:
             Single: [{"target": "april"}]
             Bulk: [{"target": "april"}, {"target": "bob@company.com"}]
@@ -286,30 +309,34 @@ def register_mailbox_tools(mcp: FastMCP):
         count = len(list(ensure_iterable(targets)))
         await log_bulk_operation_start(ctx, "Deleting", count, "mailbox")
         await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")
-        
+
         result = await process_delete_mailbox(targets, ctx)
         await log_bulk_operation_result(ctx, "Mailbox deletion", result, "mailbox")
         return result
 
     @bulk_processor
-    async def process_reset_password(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+    async def process_reset_password(
+        item: Dict[str, Any], ctx: Context
+    ) -> Dict[str, Any]:
         """Process a single password reset"""
         # Validate required fields
-        validate_required_fields(item, ["target", "new_password"], "reset_mailbox_password")
-        
+        validate_required_fields(
+            item, ["target", "new_password"], "reset_mailbox_password"
+        )
+
         target = item["target"]
         new_password = item["new_password"]
-        
+
         # Parse target
         parsed = parse_email_target(target)
         domain, local_part = parsed[0]
         email_address = format_email_address(domain, local_part)
-        
+
         await log_operation_start(ctx, "Resetting password", email_address)
-        
+
         service = get_service_factory().mailbox_service()
         await service.reset_mailbox_password(domain, local_part, new_password)
-        
+
         await log_operation_success(ctx, "Reset password", email_address)
         return {"reset": email_address, "success": True}
 
@@ -322,17 +349,19 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def reset_mailbox_password(resets: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+    async def reset_mailbox_password(
+        resets: List[Dict[str, Any]], ctx: Context
+    ) -> Dict[str, Any]:
         """Reset passwords for one or more mailboxes.
-        
+
         Args:
             resets: List of password reset specifications. Each dict should contain:
                 - target: Email address or local part (required)
                 - new_password: The new password for authentication (required)
-            
+
         Returns:
             JSON object confirming password updates
-            
+
         Examples:
             Single: [{"target": "april", "new_password": "newpass123"}]
             Bulk: [
@@ -342,38 +371,46 @@ def register_mailbox_tools(mcp: FastMCP):
         """
         count = len(list(ensure_iterable(resets)))
         await log_bulk_operation_start(ctx, "Resetting passwords for", count, "mailbox")
-        
+
         result = await process_reset_password(resets, ctx)
         await log_bulk_operation_result(ctx, "Password reset", result, "mailbox")
         return result
 
     @bulk_processor
-    async def process_set_autoresponder(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+    async def process_set_autoresponder(
+        item: Dict[str, Any], ctx: Context
+    ) -> Dict[str, Any]:
         """Process a single autoresponder configuration"""
         # Validate required fields
         validate_required_fields(item, ["target", "active"], "set_autoresponder")
-        
+
         target = item["target"]
         active = item["active"]
         subject = get_field_with_default(item, "subject")
         body = get_field_with_default(item, "body")
         expires_on = get_field_with_default(item, "expires_on")
-        
+
         # Parse target
         parsed = parse_email_target(target)
         domain, local_part = parsed[0]
         email_address = format_email_address(domain, local_part)
-        
+
         status = "Enabling" if active else "Disabling"
         await log_operation_start(ctx, f"{status} autoresponder", email_address)
-        
+
         service = get_service_factory().mailbox_service()
         result = await service.set_autoresponder(
             domain, local_part, active, subject, body, expires_on
         )
-        
-        await log_operation_success(ctx, f"{status.lower()} autoresponder", email_address)
-        return {"autoresponder": result, "email_address": email_address, "success": True}
+
+        await log_operation_success(
+            ctx, f"{status.lower()} autoresponder", email_address
+        )
+        return {
+            "autoresponder": result,
+            "email_address": email_address,
+            "success": True,
+        }
 
     @mcp.tool(
         tags={"mailbox", "autoresponder", "configuration"},
@@ -384,9 +421,11 @@ def register_mailbox_tools(mcp: FastMCP):
             "openWorldHint": True,
         },
     )
-    async def set_autoresponder(autoresponders: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+    async def set_autoresponder(
+        autoresponders: List[Dict[str, Any]], ctx: Context
+    ) -> Dict[str, Any]:
         """Configure automatic email responses for one or more mailboxes.
-        
+
         Args:
             autoresponders: List of autoresponder specifications. Each dict should contain:
                 - target: Email address or local part (required)
@@ -394,10 +433,10 @@ def register_mailbox_tools(mcp: FastMCP):
                 - subject: Subject line for replies (optional)
                 - body: Message content for replies (optional)
                 - expires_on: Expiration date YYYY-MM-DD (optional)
-            
+
         Returns:
             JSON object confirming autoresponder configuration
-            
+
         Examples:
             Single: [{"target": "april", "active": true, "subject": "Out of Office"}]
             Bulk: [
@@ -406,8 +445,12 @@ def register_mailbox_tools(mcp: FastMCP):
             ]
         """
         count = len(list(ensure_iterable(autoresponders)))
-        await log_bulk_operation_start(ctx, "Configuring autoresponders for", count, "mailbox")
-        
+        await log_bulk_operation_start(
+            ctx, "Configuring autoresponders for", count, "mailbox"
+        )
+
         result = await process_set_autoresponder(autoresponders, ctx)
-        await log_bulk_operation_result(ctx, "Autoresponder configuration", result, "mailbox")
+        await log_bulk_operation_result(
+            ctx, "Autoresponder configuration", result, "mailbox"
+        )
         return result

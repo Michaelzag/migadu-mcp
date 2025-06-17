@@ -9,16 +9,16 @@ from migadu_mcp.config import get_config
 
 def parse_email_target(target: Union[str, List[str]]) -> List[Tuple[str, str]]:
     """Parse email target(s) into (domain, local_part) tuples with smart domain resolution.
-    
+
     Args:
         target: Single email/local_part or list of emails/local_parts
-        
+
     Returns:
         List of (domain, local_part) tuples
-        
+
     Raises:
         ValueError: If domain cannot be determined
-        
+
     Examples:
         parse_email_target("april") -> [("default-domain.com", "april")]
         parse_email_target("april@company.com") -> [("company.com", "april")]
@@ -28,10 +28,10 @@ def parse_email_target(target: Union[str, List[str]]) -> List[Tuple[str, str]]:
         targets = [target]
     else:
         targets = target
-    
+
     result = []
     default_domain = None
-    
+
     for item in targets:
         if "@" in item:
             # Full email address provided
@@ -48,7 +48,7 @@ def parse_email_target(target: Union[str, List[str]]) -> List[Tuple[str, str]]:
                         "Either provide full email addresses (user@domain.com) or set MIGADU_DOMAIN environment variable."
                     )
             result.append((default_domain, item))
-    
+
     return result
 
 
@@ -59,7 +59,7 @@ def format_email_address(domain: str, local_part: str) -> str:
 
 def validate_email_format(email: str) -> bool:
     """Basic email format validation"""
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(email_pattern, email))
 
 
