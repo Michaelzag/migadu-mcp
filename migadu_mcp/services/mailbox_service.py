@@ -57,7 +57,7 @@ class MailboxService:
         if password:
             data["password"] = password
         elif password_recovery_email:
-            data["password_method"] = "invitation"
+            data["password_method"] = "invitation"  # nosec B105 - API parameter, not a password
             data["password_recovery_email"] = password_recovery_email
 
         if forwarding_to:
