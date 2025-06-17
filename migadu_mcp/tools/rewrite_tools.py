@@ -1,119 +1,286 @@
 #!/usr/bin/env python3
 """
-MCP tools for rewrite operations
+MCP tools for rewrite operations using List[Dict] + iterator pattern
 """
 
-from typing import Dict, Any, List, Optional
-from fastmcp import FastMCP
+from typing import Dict, Any, List
+from fastmcp import FastMCP, Context
 from migadu_mcp.services.service_factory import get_service_factory
-from migadu_mcp.utils.context_protection import truncate_response_if_needed
+from migadu_mcp.utils.tool_helpers import (
+    with_context_protection,
+    log_operation_start,
+    log_operation_success,
+    log_operation_error,
+)
+from migadu_mcp.utils.bulk_processing import (
+    bulk_processor,
+    ensure_iterable,
+    log_bulk_operation_start,
+    log_bulk_operation_result,
+    validate_required_fields,
+    get_field_with_default,
+)
 
 
 def register_rewrite_tools(mcp: FastMCP):
-    """Register rewrite tools with FastMCP instance"""
+    """Register rewrite tools using List[Dict] + iterator pattern"""
 
-    @mcp.tool
-    async def list_rewrites(domain: str) -> Dict[str, Any]:
-        """Retrieve all pattern-based rewrite rules configured for a domain. Returns a summary with
-        statistics and sample rewrites to avoid context explosion. Rewrites are advanced aliases that
-        use wildcard patterns to match multiple email addresses. Use get_rewrite() for detailed individual info.
-
+    @mcp.tool(
+        tags={"rewrite", "read", "list"},
+        annotations={
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    @with_context_protection(max_tokens=2000)
+    async def list_rewrites(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
+        """List all pattern-based rewrite rules for a domain. Returns summary with statistics and samples.
+        
         Args:
-            domain: The domain name to list rewrite rules for (e.g., 'mydomain.org')
-
+            domain: Domain name (e.g., 'mydomain.org'). If not provided, uses MIGADU_DOMAIN.
+            
         Returns:
-            JSON object with rewrite summary and statistics to prevent context overflow
+            JSON object with rewrite rules summary and statistics
         """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        result = await service.list_rewrites(domain)
+        if domain is None:
+            from migadu_mcp.config import get_config
+            config = get_config()
+            domain = config.get_default_domain()
+            if not domain:
+                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
+        
+        await log_operation_start(ctx, "Listing rewrite rules", domain)
+        try:
+            service = get_service_factory().rewrite_service()
+            result = await service.list_rewrites(domain)
+            count = len(result.get("rewrites", []))
+            await log_operation_success(ctx, "Listed rewrite rules", domain, count)
+            return result
+        except Exception as e:
+            await log_operation_error(ctx, "List rewrites", domain, str(e))
+            raise
 
-        # Apply context protection to prevent context explosion
-        return await truncate_response_if_needed(result, max_tokens=2000)
-
-    @mcp.tool
-    async def create_rewrite(
-        domain: str, name: str, local_part_rule: str, destinations: List[str]
-    ) -> Dict[str, Any]:
-        """Create a new pattern-based rewrite rule for dynamic email forwarding. Rewrites use wildcard
-        patterns to match multiple email addresses and forward them to specified destinations. For example,
-        a pattern 'demo-*' will match demo-test, demo-staging, demo-production, etc. This enables dynamic
-        email routing without creating individual aliases for each variation. Destinations must be on the
-        same domain - external addresses will be rewritten to the domain.
-
+    @mcp.tool(
+        tags={"rewrite", "read", "details"},
+        annotations={
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def get_rewrite(name: str, ctx: Context, domain: str | None = None) -> Dict[str, Any]:
+        """Get detailed information about a specific rewrite rule.
+        
         Args:
-            domain: The domain name (e.g., 'mydomain.org')
-            name: Unique identifier/slug for this rewrite rule (e.g., 'demo-catchall')
-            local_part_rule: Pattern to match email addresses (e.g., 'demo-*' or 'support-*')
-            destinations: List of email addresses to forward matched messages to (same domain only)
-
+            name: Unique identifier/slug of the rewrite rule
+            domain: Domain name. If not provided, uses MIGADU_DOMAIN.
+            
         Returns:
-            JSON object with newly created rewrite rule configuration
+            JSON object with complete rewrite rule configuration
         """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        return await service.create_rewrite(domain, name, local_part_rule, destinations)
+        if domain is None:
+            from migadu_mcp.config import get_config
+            config = get_config()
+            domain = config.get_default_domain()
+            if not domain:
+                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
+        
+        try:
+            await log_operation_start(ctx, "Retrieving rewrite rule details", f"{name}@{domain}")
+            
+            service = get_service_factory().rewrite_service()
+            result = await service.get_rewrite(domain, name)
+            await log_operation_success(ctx, "Retrieved rewrite rule details", f"{name}@{domain}")
+            return result
+        except Exception as e:
+            await log_operation_error(ctx, "Get rewrite", f"{name}@{domain}", str(e))
+            raise
 
-    @mcp.tool
-    async def get_rewrite(domain: str, name: str) -> Dict[str, Any]:
-        """Retrieve detailed information about a specific pattern-based rewrite rule. Shows the wildcard
-        pattern, destination addresses, processing order, and rule configuration. Use this to inspect
-        rewrite settings before making changes or troubleshooting pattern-based email routing issues.
+    @bulk_processor
+    async def process_create_rewrite(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+        """Process a single rewrite rule creation"""
+        # Validate required fields
+        validate_required_fields(item, ["name", "local_part_rule", "destinations"], "create_rewrite")
+        
+        # Extract fields with defaults
+        name = item["name"]
+        local_part_rule = item["local_part_rule"]
+        destinations = item["destinations"]
+        domain = get_field_with_default(item, "domain")
+        
+        # Get domain if not provided
+        if domain is None:
+            from migadu_mcp.config import get_config
+            config = get_config()
+            domain = config.get_default_domain()
+            if not domain:
+                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
+        
+        await log_operation_start(ctx, "Creating rewrite rule", f"{name}: {local_part_rule} -> {', '.join(destinations)}")
+        
+        service = get_service_factory().rewrite_service()
+        result = await service.create_rewrite(domain, name, local_part_rule, destinations)
+        
+        await log_operation_success(ctx, "Created rewrite rule", f"{name}@{domain}")
+        return {"rewrite": result, "name": name, "domain": domain, "success": True}
 
+    @mcp.tool(
+        tags={"rewrite", "create", "pattern"},
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def create_rewrite(rewrites: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+        """Create one or more pattern-based rewrite rules for dynamic email forwarding.
+        
         Args:
-            domain: The domain name (e.g., 'mydomain.org')
-            name: Unique identifier/slug of the rewrite rule (e.g., 'demo-catchall')
-
+            rewrites: List of rewrite specifications. Each dict should contain:
+                - name: Unique identifier/slug for the rule (required)
+                - local_part_rule: Pattern to match (e.g., 'demo-*', 'support-*') (required)
+                - destinations: List of email addresses to forward to (required)
+                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
+            
         Returns:
-            JSON object with complete rewrite rule configuration and pattern details
+            JSON object with created rewrite rule(s) information
+            
+        Examples:
+            Single: [{"name": "demo-catchall", "local_part_rule": "demo-*", "destinations": ["admin@company.com"]}]
+            Bulk: [
+                {"name": "demo-catchall", "local_part_rule": "demo-*", "destinations": ["admin@company.com"]},
+                {"name": "support-routing", "local_part_rule": "support-*", "destinations": ["help@company.com"]}
+            ]
         """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        return await service.get_rewrite(domain, name)
+        count = len(list(ensure_iterable(rewrites)))
+        await log_bulk_operation_start(ctx, "Creating", count, "rewrite rule")
+        
+        result = await process_create_rewrite(rewrites, ctx)
+        await log_bulk_operation_result(ctx, "Rewrite rule creation", result, "rewrite rule")
+        return result
 
-    @mcp.tool
-    async def update_rewrite(
-        domain: str,
-        name: str,
-        new_name: Optional[str] = None,
-        local_part_rule: Optional[str] = None,
-        destinations: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """Modify configuration for an existing pattern-based rewrite rule. Update the rule name,
-        change the wildcard pattern, or modify destination addresses. Use this to adjust pattern
-        matching behavior, update forwarding destinations, or rename rules for better organization.
-        All destinations must remain on the same domain.
+    @bulk_processor
+    async def process_update_rewrite(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+        """Process a single rewrite rule update"""
+        # Validate required fields
+        validate_required_fields(item, ["name"], "update_rewrite")
+        
+        # Extract fields with defaults
+        name = item["name"]
+        domain = get_field_with_default(item, "domain")
+        new_name = get_field_with_default(item, "new_name")
+        local_part_rule = get_field_with_default(item, "local_part_rule")
+        destinations = get_field_with_default(item, "destinations")
+        
+        # Get domain if not provided
+        if domain is None:
+            from migadu_mcp.config import get_config
+            config = get_config()
+            domain = config.get_default_domain()
+            if not domain:
+                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
+        
+        await log_operation_start(ctx, "Updating rewrite rule", f"{name}@{domain}")
+        
+        service = get_service_factory().rewrite_service()
+        result = await service.update_rewrite(domain, name, new_name, local_part_rule, destinations)
+        
+        await log_operation_success(ctx, "Updated rewrite rule", f"{name}@{domain}")
+        return {"rewrite": result, "name": name, "domain": domain, "success": True}
 
+    @mcp.tool(
+        tags={"rewrite", "update", "pattern"},
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def update_rewrite(updates: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+        """Update configuration for one or more rewrite rules.
+        
         Args:
-            domain: The domain name (e.g., 'mydomain.org')
-            name: Current unique identifier/slug of the rewrite rule
-            new_name: New identifier/slug for the rule (optional)
-            local_part_rule: New pattern to match email addresses (e.g., 'support-*')
-            destinations: New list of email addresses to forward to (same domain only)
-
+            updates: List of rewrite update specifications. Each dict should contain:
+                - name: Current identifier/slug of the rule (required)
+                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
+                - new_name: New identifier/slug (optional)
+                - local_part_rule: New pattern to match (optional)
+                - destinations: New list of destinations (optional)
+            
         Returns:
-            JSON object with updated rewrite rule configuration
+            JSON object with updated rewrite rule configuration(s)
+            
+        Examples:
+            Single: [{"name": "demo-catchall", "destinations": ["newadmin@company.com"]}]
+            Bulk: [
+                {"name": "demo-catchall", "local_part_rule": "test-*"},
+                {"name": "support-routing", "new_name": "help-routing"}
+            ]
         """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        return await service.update_rewrite(
-            domain, name, new_name, local_part_rule, destinations
-        )
+        count = len(list(ensure_iterable(updates)))
+        await log_bulk_operation_start(ctx, "Updating", count, "rewrite rule")
+        
+        result = await process_update_rewrite(updates, ctx)
+        await log_bulk_operation_result(ctx, "Rewrite rule update", result, "rewrite rule")
+        return result
 
-    @mcp.tool
-    async def delete_rewrite(domain: str, name: str) -> Dict[str, Any]:
-        """Permanently remove a pattern-based rewrite rule from the domain. The wildcard pattern will
-        no longer match or forward messages, and all matching email addresses become unavailable. This
-        action is immediate and irreversible. Use this to clean up old pattern rules or when restructuring
-        dynamic email routing systems.
+    @bulk_processor
+    async def process_delete_rewrite(item: Dict[str, Any], ctx: Context) -> Dict[str, Any]:
+        """Process a single rewrite rule deletion"""
+        # Validate required fields
+        validate_required_fields(item, ["name"], "delete_rewrite")
+        
+        # Extract fields with defaults
+        name = item["name"]
+        domain = get_field_with_default(item, "domain")
+        
+        # Get domain if not provided
+        if domain is None:
+            from migadu_mcp.config import get_config
+            config = get_config()
+            domain = config.get_default_domain()
+            if not domain:
+                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
+        
+        await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting rewrite rule {name}@{domain}")
+        
+        service = get_service_factory().rewrite_service()
+        await service.delete_rewrite(domain, name)
+        
+        await log_operation_success(ctx, "Deleted rewrite rule", f"{name}@{domain}")
+        return {"deleted": f"{name}@{domain}", "success": True}
 
+    @mcp.tool(
+        tags={"rewrite", "delete", "destructive"},
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def delete_rewrite(targets: List[Dict[str, Any]], ctx: Context) -> Dict[str, Any]:
+        """Delete one or more rewrite rules.
+        
         Args:
-            domain: The domain name (e.g., 'mydomain.org')
-            name: Unique identifier/slug of the rewrite rule to delete
-
+            targets: List of deletion specifications. Each dict should contain:
+                - name: Identifier/slug of the rule to delete (required)
+                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
+            
         Returns:
-            JSON object confirming rewrite rule deletion
+            JSON object with deletion results
+            
+        Examples:
+            Single: [{"name": "demo-catchall"}]
+            Bulk: [{"name": "demo-catchall"}, {"name": "support-routing", "domain": "other.com"}]
         """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        return await service.delete_rewrite(domain, name)
+        count = len(list(ensure_iterable(targets)))
+        await log_bulk_operation_start(ctx, "Deleting", count, "rewrite rule")
+        await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")
+        
+        result = await process_delete_rewrite(targets, ctx)
+        await log_bulk_operation_result(ctx, "Rewrite rule deletion", result, "rewrite rule")
+        return result

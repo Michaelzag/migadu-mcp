@@ -46,42 +46,31 @@ class TestMigaduMCPTools:
             tools = await client.list_tools()
             tool_names = [tool.name for tool in tools]
 
-            # Expected tools based on all the tool files
+            # Expected tools based on new List[Dict] consolidated API
             expected_tools = [
                 # Mailbox tools
                 "list_mailboxes",
-                "list_my_mailboxes",
                 "get_mailbox",
-                "get_my_mailbox",
                 "create_mailbox",
-                "create_my_mailbox",
                 "update_mailbox",
                 "delete_mailbox",
-                "bulk_delete_mailboxes",
                 "reset_mailbox_password",
                 "set_autoresponder",
-                "list_forwardings",
-                "create_forwarding",
-                "get_forwarding",
-                "update_forwarding",
-                "delete_forwarding",
-                "list_my_aliases",
                 # Alias tools
                 "list_aliases",
-                "create_alias",
                 "get_alias",
+                "create_alias",
                 "update_alias",
                 "delete_alias",
                 # Identity tools
                 "list_identities",
                 "create_identity",
-                "get_identity",
                 "update_identity",
                 "delete_identity",
                 # Rewrite tools
                 "list_rewrites",
-                "create_rewrite",
                 "get_rewrite",
+                "create_rewrite",
                 "update_rewrite",
                 "delete_rewrite",
             ]
@@ -153,18 +142,18 @@ class TestMigaduMCPIntegration:
     """Integration tests that require valid Migadu credentials"""
 
     @pytest.mark.integration
-    async def test_list_my_mailboxes_integration(self, mcp_server):
+    async def test_list_mailboxes_integration(self, mcp_server):
         """Integration test for listing mailboxes (requires valid env vars)"""
         async with Client(mcp_server) as client:
             try:
-                result = await client.call_tool("list_my_mailboxes", {})
+                result = await client.call_tool("list_mailboxes", {})
                 # Should return a valid result structure
                 assert len(result) > 0
                 # Just check we got some kind of response
                 assert result[0] is not None
             except Exception as e:
                 # If no valid credentials, should get a configuration error
-                assert "migadu_email" in str(e).lower() or "api_key" in str(e).lower()
+                assert "migadu_email" in str(e).lower() or "api_key" in str(e).lower() or "migadu_domain" in str(e).lower()
 
     @pytest.mark.integration
     async def test_read_mailboxes_resource(self, mcp_server):
