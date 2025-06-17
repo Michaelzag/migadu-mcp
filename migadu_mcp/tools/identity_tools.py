@@ -28,7 +28,7 @@ def register_identity_tools(mcp: FastMCP):
         factory = get_service_factory()
         service = factory.identity_service()
         result = await service.list_identities(domain, mailbox)
-        
+
         # Apply context protection to prevent AI context explosion
         return truncate_response_if_needed(result, max_tokens=2000)
 

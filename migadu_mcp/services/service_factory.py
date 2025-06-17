@@ -23,8 +23,10 @@ class ServiceFactory:
         if self._client is None:
             config = get_config()
             # Config validation ensures these are not None
-            assert config.email is not None, "Email must be configured"
-            assert config.api_key is not None, "API key must be configured"
+            if config.email is None:
+                raise ValueError("Email must be configured")
+            if config.api_key is None:
+                raise ValueError("API key must be configured")
             self._client = MigaduClient(config.email, config.api_key)
         return self._client
 

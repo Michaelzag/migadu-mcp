@@ -39,13 +39,15 @@ def register_mailbox_tools(mcp: FastMCP):
             result = await service.list_mailboxes(domain)
             count = len(result.get("mailboxes", []))
             await ctx.info(f"✅ Found {count} mailboxes for {domain}")
-            
+
             # Apply context protection to prevent AI context explosion
             protected_result = truncate_response_if_needed(result, max_tokens=2000)
-            
+
             if "mailboxes_summary" in protected_result:
-                await ctx.info(f"📊 Response summarized to prevent context overflow. Use get_mailbox() for details.")
-            
+                await ctx.info(
+                    "📊 Response summarized to prevent context overflow. Use get_mailbox() for details."
+                )
+
             return protected_result
         except Exception as e:
             await ctx.error(f"❌ Failed to list mailboxes for {domain}: {str(e)}")
@@ -76,13 +78,15 @@ def register_mailbox_tools(mcp: FastMCP):
             result = await service.list_mailboxes(domain)
             count = len(result.get("mailboxes", []))
             await ctx.info(f"✅ Found {count} mailboxes for default domain {domain}")
-            
+
             # Apply context protection to prevent AI context explosion
             protected_result = truncate_response_if_needed(result, max_tokens=2000)
-            
+
             if "mailboxes_summary" in protected_result:
-                await ctx.info(f"📊 Response summarized to prevent context overflow. Use get_my_mailbox() for details.")
-            
+                await ctx.info(
+                    "📊 Response summarized to prevent context overflow. Use get_my_mailbox() for details."
+                )
+
             return protected_result
         except Exception as e:
             await ctx.error(
@@ -285,7 +289,7 @@ def register_mailbox_tools(mcp: FastMCP):
         factory = get_service_factory()
         service = factory.alias_service()
         result = await service.list_aliases(domain)
-        
+
         # Apply context protection to prevent AI context explosion
         return truncate_response_if_needed(result, max_tokens=2000)
 
@@ -540,7 +544,7 @@ def register_mailbox_tools(mcp: FastMCP):
         factory = get_service_factory()
         service = factory.mailbox_service()
         result = await service.list_forwardings(domain, mailbox)
-        
+
         # Apply context protection to prevent AI context explosion
         return truncate_response_if_needed(result, max_tokens=2000)
 

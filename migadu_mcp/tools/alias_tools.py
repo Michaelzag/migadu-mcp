@@ -27,7 +27,7 @@ def register_alias_tools(mcp: FastMCP):
         factory = get_service_factory()
         service = factory.alias_service()
         result = await service.list_aliases(domain)
-        
+
         # Apply context protection to prevent AI context explosion
         return truncate_response_if_needed(result, max_tokens=2000)
 

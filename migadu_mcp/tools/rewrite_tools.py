@@ -27,7 +27,7 @@ def register_rewrite_tools(mcp: FastMCP):
         factory = get_service_factory()
         service = factory.rewrite_service()
         result = await service.list_rewrites(domain)
-        
+
         # Apply context protection to prevent AI context explosion
         return truncate_response_if_needed(result, max_tokens=2000)
 
