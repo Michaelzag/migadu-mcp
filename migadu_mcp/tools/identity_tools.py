@@ -6,6 +6,7 @@ MCP tools for identity operations
 from typing import Dict, Any, Optional
 from fastmcp import FastMCP
 from migadu_mcp.services.service_factory import get_service_factory
+from migadu_mcp.utils.context_protection import truncate_response_if_needed
 
 
 def register_identity_tools(mcp: FastMCP):
@@ -13,21 +14,23 @@ def register_identity_tools(mcp: FastMCP):
 
     @mcp.tool
     async def list_identities(domain: str, mailbox: str) -> Dict[str, Any]:
-        """Retrieve all email identities configured for a mailbox. Identities are additional 'send-as'
-        email addresses that a mailbox user can use when composing messages, beyond their primary email
-        address. Each identity has its own permissions, display name, and access controls. Use this to
-        audit which additional email addresses a user can send from and manage identity-based permissions.
+        """Retrieve all email identities configured for a mailbox. Returns a summary with statistics
+        and sample identities to avoid context explosion. Identities are additional 'send-as' email
+        addresses that a mailbox user can use. Use get_identity() for detailed individual identity info.
 
         Args:
             domain: The domain name (e.g., 'mydomain.org')
             mailbox: Username part of the mailbox (e.g., 'demo' for demo@mydomain.org)
 
         Returns:
-            JSON object containing array of all identities with permissions and configuration
+            JSON object with identity summary and statistics to prevent context overflow
         """
         factory = get_service_factory()
         service = factory.identity_service()
-        return await service.list_identities(domain, mailbox)
+        result = await service.list_identities(domain, mailbox)
+        
+        # Apply context protection to prevent AI context explosion
+        return truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool
     async def create_identity(

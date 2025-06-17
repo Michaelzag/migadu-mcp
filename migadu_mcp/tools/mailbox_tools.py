@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 from fastmcp import FastMCP, Context
 from migadu_mcp.config import get_config
 from migadu_mcp.services.service_factory import get_service_factory
+from migadu_mcp.utils.context_protection import truncate_response_if_needed
 
 
 def register_mailbox_tools(mcp: FastMCP):
@@ -21,16 +22,15 @@ def register_mailbox_tools(mcp: FastMCP):
         },
     )
     async def list_mailboxes(domain: str, ctx: Context) -> Dict[str, Any]:
-        """Retrieve all email mailboxes configured for a domain. Mailboxes are full email accounts with storage,
-        password authentication, and IMAP/POP3 access capabilities. Each mailbox shows configuration details
-        including permissions (send/receive/IMAP/POP3), spam settings, autoresponder status, and security options.
-        Use this to audit domain email accounts, review permissions, and manage organizational email infrastructure.
+        """Retrieve all email mailboxes configured for a domain. Returns a summary with statistics and sample
+        mailboxes to avoid context explosion. Mailboxes are full email accounts with storage, password
+        authentication, and IMAP/POP3 access capabilities. Use get_mailbox() for detailed individual mailbox info.
 
         Args:
             domain: The domain name to list mailboxes for (e.g., 'mydomain.org')
 
         Returns:
-            JSON object containing array of all mailboxes with full configuration details
+            JSON object with mailbox summary and statistics to prevent context overflow
         """
         await ctx.info(f"📋 Listing all mailboxes for domain: {domain}")
         try:
@@ -39,7 +39,14 @@ def register_mailbox_tools(mcp: FastMCP):
             result = await service.list_mailboxes(domain)
             count = len(result.get("mailboxes", []))
             await ctx.info(f"✅ Found {count} mailboxes for {domain}")
-            return result
+            
+            # Apply context protection to prevent AI context explosion
+            protected_result = truncate_response_if_needed(result, max_tokens=2000)
+            
+            if "mailboxes_summary" in protected_result:
+                await ctx.info(f"📊 Response summarized to prevent context overflow. Use get_mailbox() for details.")
+            
+            return protected_result
         except Exception as e:
             await ctx.error(f"❌ Failed to list mailboxes for {domain}: {str(e)}")
             raise
@@ -53,13 +60,12 @@ def register_mailbox_tools(mcp: FastMCP):
         },
     )
     async def list_my_mailboxes(ctx: Context) -> Dict[str, Any]:
-        """Retrieve all email mailboxes for your default configured domain. Mailboxes are full email accounts
-        with storage, password authentication, and IMAP/POP3 access. This convenience function uses your
-        MIGADU_DOMAIN environment variable to automatically target the correct domain. Returns detailed
-        configuration for each mailbox including permissions, spam settings, and security options.
+        """Retrieve all email mailboxes for your default configured domain. Returns a summary with statistics
+        and sample mailboxes to avoid context explosion. Mailboxes are full email accounts with storage,
+        password authentication, and IMAP/POP3 access. Use get_my_mailbox() for detailed individual mailbox info.
 
         Returns:
-            JSON object containing array of all mailboxes for the default domain
+            JSON object with mailbox summary and statistics to prevent context overflow
         """
         config = get_config()
         domain = config.get_default_domain()
@@ -70,7 +76,14 @@ def register_mailbox_tools(mcp: FastMCP):
             result = await service.list_mailboxes(domain)
             count = len(result.get("mailboxes", []))
             await ctx.info(f"✅ Found {count} mailboxes for default domain {domain}")
-            return result
+            
+            # Apply context protection to prevent AI context explosion
+            protected_result = truncate_response_if_needed(result, max_tokens=2000)
+            
+            if "mailboxes_summary" in protected_result:
+                await ctx.info(f"📊 Response summarized to prevent context overflow. Use get_my_mailbox() for details.")
+            
+            return protected_result
         except Exception as e:
             await ctx.error(
                 f"❌ Failed to list mailboxes for default domain {domain}: {str(e)}"
@@ -260,19 +273,21 @@ def register_mailbox_tools(mcp: FastMCP):
 
     @mcp.tool
     async def list_my_aliases() -> Dict[str, Any]:
-        """Retrieve all email aliases configured for your default domain. Aliases are email addresses that
-        automatically forward incoming messages to one or more destination addresses without storing the
-        messages themselves. This convenience function uses your MIGADU_DOMAIN environment variable.
-        Use this to audit email forwarding rules and manage domain-wide email routing.
+        """Retrieve all email aliases configured for your default domain. Returns a summary with statistics
+        and sample aliases to avoid context explosion. Aliases are email addresses that automatically forward
+        incoming messages without storing them. Use get_alias() for detailed individual alias info.
 
         Returns:
-            JSON object containing array of all aliases with their destinations and configuration
+            JSON object with alias summary and statistics to prevent context overflow
         """
         config = get_config()
         domain = config.get_default_domain()
         factory = get_service_factory()
         service = factory.alias_service()
-        return await service.list_aliases(domain)
+        result = await service.list_aliases(domain)
+        
+        # Apply context protection to prevent AI context explosion
+        return truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool(
         tags={"mailbox", "update", "configuration"},
@@ -511,21 +526,23 @@ def register_mailbox_tools(mcp: FastMCP):
 
     @mcp.tool
     async def list_forwardings(domain: str, mailbox: str) -> Dict[str, Any]:
-        """Retrieve all external forwarding rules configured for a mailbox. Forwardings automatically
-        send copies of incoming messages to external email addresses with confirmation and verification
-        processes. Each forwarding shows the destination address, confirmation status, active state,
-        and expiration settings. Use this to audit external forwarding rules and manage message routing.
+        """Retrieve all external forwarding rules configured for a mailbox. Returns a summary with
+        statistics and sample forwardings to avoid context explosion. Forwardings automatically send
+        copies of incoming messages to external email addresses. Use get_forwarding() for detailed info.
 
         Args:
             domain: The domain name (e.g., 'mydomain.org')
             mailbox: Username part of the mailbox (e.g., 'demo' for demo@mydomain.org)
 
         Returns:
-            JSON object containing array of all forwarding rules with status and configuration
+            JSON object with forwarding summary and statistics to prevent context overflow
         """
         factory = get_service_factory()
         service = factory.mailbox_service()
-        return await service.list_forwardings(domain, mailbox)
+        result = await service.list_forwardings(domain, mailbox)
+        
+        # Apply context protection to prevent AI context explosion
+        return truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool
     async def create_forwarding(

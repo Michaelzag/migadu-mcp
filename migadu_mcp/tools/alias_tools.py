@@ -6,6 +6,7 @@ MCP tools for alias operations
 from typing import Dict, Any, List
 from fastmcp import FastMCP
 from migadu_mcp.services.service_factory import get_service_factory
+from migadu_mcp.utils.context_protection import truncate_response_if_needed
 
 
 def register_alias_tools(mcp: FastMCP):
@@ -13,22 +14,22 @@ def register_alias_tools(mcp: FastMCP):
 
     @mcp.tool
     async def list_aliases(domain: str) -> Dict[str, Any]:
-        """Retrieve all email aliases configured for a domain. Aliases are email addresses that
-        automatically forward incoming messages to one or more destination addresses without storing
-        the messages themselves. Unlike mailboxes, aliases have no storage, authentication, or IMAP/POP3
-        access - they only redirect messages. Each alias shows its destinations, internal-only status,
-        and routing configuration. Use this to audit email forwarding rules and manage domain-wide
-        email routing infrastructure.
+        """Retrieve all email aliases configured for a domain. Returns a summary with statistics
+        and sample aliases to avoid context explosion. Aliases are email addresses that automatically
+        forward incoming messages without storing them. Use get_alias() for detailed individual alias info.
 
         Args:
             domain: The domain name to list aliases for (e.g., 'mydomain.org')
 
         Returns:
-            JSON object containing array of all aliases with their destinations and configuration
+            JSON object with alias summary and statistics to prevent context overflow
         """
         factory = get_service_factory()
         service = factory.alias_service()
-        return await service.list_aliases(domain)
+        result = await service.list_aliases(domain)
+        
+        # Apply context protection to prevent AI context explosion
+        return truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool
     async def create_alias(

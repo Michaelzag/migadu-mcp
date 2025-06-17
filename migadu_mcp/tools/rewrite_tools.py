@@ -6,6 +6,7 @@ MCP tools for rewrite operations
 from typing import Dict, Any, List, Optional
 from fastmcp import FastMCP
 from migadu_mcp.services.service_factory import get_service_factory
+from migadu_mcp.utils.context_protection import truncate_response_if_needed
 
 
 def register_rewrite_tools(mcp: FastMCP):
@@ -13,22 +14,22 @@ def register_rewrite_tools(mcp: FastMCP):
 
     @mcp.tool
     async def list_rewrites(domain: str) -> Dict[str, Any]:
-        """Retrieve all pattern-based rewrite rules configured for a domain. Rewrites are advanced
-        aliases that use wildcard patterns to match multiple email addresses and forward them to
-        specified destinations. Unlike regular aliases, rewrites can capture entire ranges of addresses
-        using patterns like 'support-*' to match support-tickets, support-billing, etc. Each rewrite
-        shows its pattern rule, destinations, and processing order. Use this to manage dynamic email
-        routing and pattern-based forwarding systems.
+        """Retrieve all pattern-based rewrite rules configured for a domain. Returns a summary with
+        statistics and sample rewrites to avoid context explosion. Rewrites are advanced aliases that
+        use wildcard patterns to match multiple email addresses. Use get_rewrite() for detailed individual info.
 
         Args:
             domain: The domain name to list rewrite rules for (e.g., 'mydomain.org')
 
         Returns:
-            JSON object containing array of all rewrite rules with patterns and destinations
+            JSON object with rewrite summary and statistics to prevent context overflow
         """
         factory = get_service_factory()
         service = factory.rewrite_service()
-        return await service.list_rewrites(domain)
+        result = await service.list_rewrites(domain)
+        
+        # Apply context protection to prevent AI context explosion
+        return truncate_response_if_needed(result, max_tokens=2000)
 
     @mcp.tool
     async def create_rewrite(
