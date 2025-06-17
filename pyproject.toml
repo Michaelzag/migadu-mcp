@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "migadu-mcp"
-version = "3.2.0"
+version = "3.3.0"
 description = "Professional FastMCP server for comprehensive Migadu email management with Context logging, tool annotations, and testing infrastructure"
 readme = "README.md"
 requires-python = ">=3.13"
