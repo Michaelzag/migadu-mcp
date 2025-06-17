@@ -1,0 +1,142 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release'
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --group dev
+
+    - name: Run pytest
+      run: uv run pytest tests/ -v --tb=short
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --group dev
+
+    - name: Run ruff format check
+      run: uv run ruff format --check .
+
+    - name: Run ruff lint
+      run: uv run ruff check .
+
+    - name: Run mypy
+      run: uv run mypy migadu_mcp/
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --group dev
+
+    - name: Run bandit security check
+      run: uv run bandit -r migadu_mcp/ -f json -o bandit-report.json || true
+
+    - name: Upload bandit report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: bandit-report
+        path: bandit-report.json
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Build package
+      run: uv build --no-sources
+
+    - name: Verify build
+      run: |
+        ls -la dist/
+        # Check that both wheel and source distribution exist
+        test -f dist/migadu_mcp-*.whl
+        test -f dist/migadu_mcp-*.tar.gz
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        print-hash: true
