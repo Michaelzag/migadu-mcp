@@ -3,7 +3,7 @@
 Generic bulk processing utilities for handling JSON objects uniformly
 """
 
-from typing import Dict, Any, List, Callable, Iterator, Type
+from typing import Dict, Any, Callable, Iterator, Type
 from functools import wraps
 from fastmcp import Context
 from pydantic import BaseModel, ValidationError
@@ -114,24 +114,6 @@ async def log_bulk_operation_result(
             await ctx.warning(
                 f"⚠️ {operation} completed with issues: {successful}/{total} {entity_type}s succeeded, {failed} failed"
             )
-
-
-def validate_required_fields(
-    item: Dict[str, Any], required_fields: List[str], operation: str
-) -> None:
-    """Validate that required fields are present in the item dict"""
-    missing_fields = [field for field in required_fields if field not in item]
-    if missing_fields:
-        raise ValueError(
-            f"{operation} requires fields: {', '.join(missing_fields)}. Missing: {', '.join(missing_fields)}"
-        )
-
-
-def get_field_with_default(
-    item: Dict[str, Any], field: str, default: Any = None
-) -> Any:
-    """Get field from dict with default value if not present"""
-    return item.get(field, default)
 
 
 def validate_with_schema(
