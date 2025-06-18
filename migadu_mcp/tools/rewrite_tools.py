@@ -13,12 +13,15 @@ from migadu_mcp.utils.tool_helpers import (
     log_operation_error,
 )
 from migadu_mcp.utils.bulk_processing import (
-    bulk_processor,
+    bulk_processor_with_schema,
     ensure_iterable,
     log_bulk_operation_start,
     log_bulk_operation_result,
-    validate_required_fields,
-    get_field_with_default,
+)
+from migadu_mcp.utils.schemas import (
+    RewriteCreateRequest,
+    RewriteUpdateRequest,
+    RewriteDeleteRequest,
 )
 
 
@@ -105,21 +108,16 @@ def register_rewrite_tools(mcp: FastMCP):
             await log_operation_error(ctx, "Get rewrite", f"{name}@{domain}", str(e))
             raise
 
-    @bulk_processor
+    @bulk_processor_with_schema(RewriteCreateRequest)
     async def process_create_rewrite(
-        item: Dict[str, Any], ctx: Context
+        validated_item: RewriteCreateRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single rewrite rule creation"""
-        # Validate required fields
-        validate_required_fields(
-            item, ["name", "local_part_rule", "destinations"], "create_rewrite"
-        )
-
-        # Extract fields with defaults
-        name = item["name"]
-        local_part_rule = item["local_part_rule"]
-        destinations = item["destinations"]
-        domain = get_field_with_default(item, "domain")
+        """Process a single rewrite rule creation with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        name = validated_item.name
+        local_part_rule = validated_item.local_part_rule
+        destinations = validated_item.destinations
+        domain = validated_item.domain
 
         # Get domain if not provided
         if domain is None:
@@ -137,8 +135,10 @@ def register_rewrite_tools(mcp: FastMCP):
         )
 
         service = get_service_factory().rewrite_service()
+        # Convert List[EmailStr] to List[str] for service layer
+        destinations_str = [str(dest) for dest in destinations]
         result = await service.create_rewrite(
-            domain, name, local_part_rule, destinations
+            domain, name, local_part_rule, destinations_str
         )
 
         await log_operation_success(ctx, "Created rewrite rule", f"{name}@{domain}")
@@ -184,20 +184,17 @@ def register_rewrite_tools(mcp: FastMCP):
         )
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(RewriteUpdateRequest)
     async def process_update_rewrite(
-        item: Dict[str, Any], ctx: Context
+        validated_item: RewriteUpdateRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single rewrite rule update"""
-        # Validate required fields
-        validate_required_fields(item, ["name"], "update_rewrite")
-
-        # Extract fields with defaults
-        name = item["name"]
-        domain = get_field_with_default(item, "domain")
-        new_name = get_field_with_default(item, "new_name")
-        local_part_rule = get_field_with_default(item, "local_part_rule")
-        destinations = get_field_with_default(item, "destinations")
+        """Process a single rewrite rule update with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        name = validated_item.name
+        domain = validated_item.domain
+        new_name = validated_item.new_name
+        local_part_rule = validated_item.local_part_rule
+        destinations = validated_item.destinations
 
         # Get domain if not provided
         if domain is None:
@@ -211,8 +208,13 @@ def register_rewrite_tools(mcp: FastMCP):
         await log_operation_start(ctx, "Updating rewrite rule", f"{name}@{domain}")
 
         service = get_service_factory().rewrite_service()
+        # Convert Optional[List[EmailStr]] to Optional[List[str]] for service layer
+        destinations_str = None
+        if destinations is not None:
+            destinations_str = [str(dest) for dest in destinations]
+        
         result = await service.update_rewrite(
-            domain, name, new_name, local_part_rule, destinations
+            domain, name, new_name, local_part_rule, destinations_str
         )
 
         await log_operation_success(ctx, "Updated rewrite rule", f"{name}@{domain}")
@@ -259,17 +261,14 @@ def register_rewrite_tools(mcp: FastMCP):
         )
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(RewriteDeleteRequest)
     async def process_delete_rewrite(
-        item: Dict[str, Any], ctx: Context
+        validated_item: RewriteDeleteRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single rewrite rule deletion"""
-        # Validate required fields
-        validate_required_fields(item, ["name"], "delete_rewrite")
-
-        # Extract fields with defaults
-        name = item["name"]
-        domain = get_field_with_default(item, "domain")
+        """Process a single rewrite rule deletion with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        name = validated_item.name
+        domain = validated_item.domain
 
         # Get domain if not provided
         if domain is None:

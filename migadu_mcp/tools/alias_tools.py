@@ -13,12 +13,15 @@ from migadu_mcp.utils.tool_helpers import (
     log_operation_error,
 )
 from migadu_mcp.utils.bulk_processing import (
-    bulk_processor,
+    bulk_processor_with_schema,
     ensure_iterable,
     log_bulk_operation_start,
     log_bulk_operation_result,
-    validate_required_fields,
-    get_field_with_default,
+)
+from migadu_mcp.utils.schemas import (
+    AliasCreateRequest,
+    AliasUpdateRequest,
+    AliasDeleteRequest,
 )
 from migadu_mcp.utils.email_parsing import format_email_address
 
@@ -103,19 +106,16 @@ def register_alias_tools(mcp: FastMCP):
             await log_operation_error(ctx, "Get alias", f"{target}@{domain}", str(e))
             raise
 
-    @bulk_processor
+    @bulk_processor_with_schema(AliasCreateRequest)
     async def process_create_alias(
-        item: Dict[str, Any], ctx: Context
+        validated_item: AliasCreateRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single alias creation"""
-        # Validate required fields
-        validate_required_fields(item, ["target", "destinations"], "create_alias")
-
-        # Extract fields with defaults
-        target = item["target"]
-        destinations = item["destinations"]
-        domain = get_field_with_default(item, "domain")
-        is_internal = get_field_with_default(item, "is_internal", False)
+        """Process a single alias creation with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        destinations = validated_item.destinations
+        domain = validated_item.domain
+        is_internal = validated_item.is_internal
 
         # Get domain if not provided
         if domain is None:
@@ -132,7 +132,9 @@ def register_alias_tools(mcp: FastMCP):
         )
 
         service = get_service_factory().alias_service()
-        result = await service.create_alias(domain, target, destinations, is_internal)
+        # Convert List[EmailStr] to List[str] for service layer
+        destinations_str = [str(dest) for dest in destinations]
+        result = await service.create_alias(domain, target, destinations_str, is_internal)
 
         await log_operation_success(ctx, "Created alias", email_address)
         if is_internal:
@@ -178,18 +180,15 @@ def register_alias_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Alias creation", result, "alias")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(AliasUpdateRequest)
     async def process_update_alias(
-        item: Dict[str, Any], ctx: Context
+        validated_item: AliasUpdateRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single alias update"""
-        # Validate required fields
-        validate_required_fields(item, ["target", "destinations"], "update_alias")
-
-        # Extract fields with defaults
-        target = item["target"]
-        destinations = item["destinations"]
-        domain = get_field_with_default(item, "domain")
+        """Process a single alias update with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        destinations = validated_item.destinations
+        domain = validated_item.domain
 
         # Get domain if not provided
         if domain is None:
@@ -206,7 +205,9 @@ def register_alias_tools(mcp: FastMCP):
         )
 
         service = get_service_factory().alias_service()
-        result = await service.update_alias(domain, target, destinations)
+        # Convert List[EmailStr] to List[str] for service layer
+        destinations_str = [str(dest) for dest in destinations]
+        result = await service.update_alias(domain, target, destinations_str)
 
         await log_operation_success(ctx, "Updated alias", email_address)
         return {"alias": result, "email_address": email_address, "success": True}
@@ -248,17 +249,14 @@ def register_alias_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Alias update", result, "alias")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(AliasDeleteRequest)
     async def process_delete_alias(
-        item: Dict[str, Any], ctx: Context
+        validated_item: AliasDeleteRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single alias deletion"""
-        # Validate required fields
-        validate_required_fields(item, ["target"], "delete_alias")
-
-        # Extract fields with defaults
-        target = item["target"]
-        domain = get_field_with_default(item, "domain")
+        """Process a single alias deletion with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        domain = validated_item.domain
 
         # Get domain if not provided
         if domain is None:
