@@ -13,15 +13,18 @@ from migadu_mcp.utils.tool_helpers import (
     log_operation_error,
 )
 from migadu_mcp.utils.bulk_processing import (
-    bulk_processor,
     bulk_processor_with_schema,
     ensure_iterable,
     log_bulk_operation_start,
     log_bulk_operation_result,
-    validate_required_fields,
-    get_field_with_default,
 )
-from migadu_mcp.utils.schemas import MailboxCreateRequest
+from migadu_mcp.utils.schemas import (
+    MailboxCreateRequest,
+    MailboxUpdateRequest,
+    MailboxDeleteRequest,
+    MailboxPasswordResetRequest,
+    AutoresponderRequest,
+)
 from migadu_mcp.utils.email_parsing import parse_email_target, format_email_address
 
 
@@ -175,23 +178,20 @@ def register_mailbox_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Mailbox creation", result, "mailbox")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(MailboxUpdateRequest)
     async def process_update_mailbox(
-        item: Dict[str, Any], ctx: Context
+        validated_item: MailboxUpdateRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single mailbox update"""
-        # Validate required fields
-        validate_required_fields(item, ["target"], "update_mailbox")
-
-        # Extract fields with defaults
-        target = item["target"]
-        name = get_field_with_default(item, "name")
-        may_send = get_field_with_default(item, "may_send")
-        may_receive = get_field_with_default(item, "may_receive")
-        may_access_imap = get_field_with_default(item, "may_access_imap")
-        may_access_pop3 = get_field_with_default(item, "may_access_pop3")
-        spam_action = get_field_with_default(item, "spam_action")
-        spam_aggressiveness = get_field_with_default(item, "spam_aggressiveness")
+        """Process a single mailbox update with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        name = validated_item.name
+        may_send = validated_item.may_send
+        may_receive = validated_item.may_receive
+        may_access_imap = validated_item.may_access_imap
+        may_access_pop3 = validated_item.may_access_pop3
+        spam_action = validated_item.spam_action
+        spam_aggressiveness = validated_item.spam_aggressiveness
 
         # Parse target
         parsed = parse_email_target(target)
@@ -258,15 +258,13 @@ def register_mailbox_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Mailbox update", result, "mailbox")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(MailboxDeleteRequest)
     async def process_delete_mailbox(
-        item: Dict[str, Any], ctx: Context
+        validated_item: MailboxDeleteRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single mailbox deletion"""
-        # Validate required fields
-        validate_required_fields(item, ["target"], "delete_mailbox")
-
-        target = item["target"]
+        """Process a single mailbox deletion with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
 
         # Parse target
         parsed = parse_email_target(target)
@@ -314,18 +312,14 @@ def register_mailbox_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Mailbox deletion", result, "mailbox")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(MailboxPasswordResetRequest)
     async def process_reset_password(
-        item: Dict[str, Any], ctx: Context
+        validated_item: MailboxPasswordResetRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single password reset"""
-        # Validate required fields
-        validate_required_fields(
-            item, ["target", "new_password"], "reset_mailbox_password"
-        )
-
-        target = item["target"]
-        new_password = item["new_password"]
+        """Process a single password reset with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        new_password = validated_item.new_password
 
         # Parse target
         parsed = parse_email_target(target)
@@ -376,19 +370,17 @@ def register_mailbox_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Password reset", result, "mailbox")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(AutoresponderRequest)
     async def process_set_autoresponder(
-        item: Dict[str, Any], ctx: Context
+        validated_item: AutoresponderRequest, ctx: Context
     ) -> Dict[str, Any]:
-        """Process a single autoresponder configuration"""
-        # Validate required fields
-        validate_required_fields(item, ["target", "active"], "set_autoresponder")
-
-        target = item["target"]
-        active = item["active"]
-        subject = get_field_with_default(item, "subject")
-        body = get_field_with_default(item, "body")
-        expires_on = get_field_with_default(item, "expires_on")
+        """Process a single autoresponder configuration with Pydantic validation"""
+        # Use validated Pydantic model directly - all validation already done
+        target = validated_item.target
+        active = validated_item.active
+        subject = validated_item.subject
+        body = validated_item.body
+        expires_on = validated_item.expires_on.isoformat() if validated_item.expires_on else None
 
         # Parse target
         parsed = parse_email_target(target)
