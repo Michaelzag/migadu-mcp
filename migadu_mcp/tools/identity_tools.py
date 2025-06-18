@@ -95,7 +95,11 @@ def register_identity_tools(mcp: FastMCP):
 
         service = get_service_factory().identity_service()
         result = await service.create_identity(
-            domain, validated_item.mailbox, validated_item.target, validated_item.name, validated_item.password
+            domain,
+            validated_item.mailbox,
+            validated_item.target,
+            validated_item.name,
+            validated_item.password,
         )
 
         await log_operation_success(ctx, "Created identity", email_address)
@@ -160,7 +164,12 @@ def register_identity_tools(mcp: FastMCP):
 
         service = get_service_factory().identity_service()
         result = await service.update_identity(
-            domain, validated_item.mailbox, validated_item.target, validated_item.name, validated_item.may_send, validated_item.may_receive
+            domain,
+            validated_item.mailbox,
+            validated_item.target,
+            validated_item.name,
+            validated_item.may_send,
+            validated_item.may_receive,
         )
 
         await log_operation_success(ctx, "Updated identity", email_address)
@@ -225,7 +234,9 @@ def register_identity_tools(mcp: FastMCP):
         await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting identity {email_address}")
 
         service = get_service_factory().identity_service()
-        await service.delete_identity(domain, validated_item.mailbox, validated_item.target)
+        await service.delete_identity(
+            domain, validated_item.mailbox, validated_item.target
+        )
 
         await log_operation_success(ctx, "Deleted identity", email_address)
         return {"deleted": email_address, "success": True}

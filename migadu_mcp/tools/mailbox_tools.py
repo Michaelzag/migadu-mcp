@@ -380,7 +380,9 @@ def register_mailbox_tools(mcp: FastMCP):
         active = validated_item.active
         subject = validated_item.subject
         body = validated_item.body
-        expires_on = validated_item.expires_on.isoformat() if validated_item.expires_on else None
+        expires_on = (
+            validated_item.expires_on.isoformat() if validated_item.expires_on else None
+        )
 
         # Parse target
         parsed = parse_email_target(target)

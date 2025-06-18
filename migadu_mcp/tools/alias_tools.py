@@ -134,7 +134,9 @@ def register_alias_tools(mcp: FastMCP):
         service = get_service_factory().alias_service()
         # Convert List[EmailStr] to List[str] for service layer
         destinations_str = [str(dest) for dest in destinations]
-        result = await service.create_alias(domain, target, destinations_str, is_internal)
+        result = await service.create_alias(
+            domain, target, destinations_str, is_internal
+        )
 
         await log_operation_success(ctx, "Created alias", email_address)
         if is_internal:

@@ -212,7 +212,7 @@ def register_rewrite_tools(mcp: FastMCP):
         destinations_str = None
         if destinations is not None:
             destinations_str = [str(dest) for dest in destinations]
-        
+
         result = await service.update_rewrite(
             domain, name, new_name, local_part_rule, destinations_str
         )
