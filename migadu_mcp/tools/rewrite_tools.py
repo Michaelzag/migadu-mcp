@@ -29,7 +29,6 @@ def register_rewrite_tools(mcp: FastMCP):
     """Register rewrite tools using List[Dict] + iterator pattern"""
 
     @mcp.tool(
-        tags={"rewrite", "read", "list"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -38,14 +37,7 @@ def register_rewrite_tools(mcp: FastMCP):
     )
     @with_context_protection(max_tokens=2000)
     async def list_rewrites(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
-        """List all pattern-based rewrite rules for a domain. Returns summary with statistics and samples.
-
-        Args:
-            domain: Domain name (e.g., 'mydomain.org'). If not provided, uses MIGADU_DOMAIN.
-
-        Returns:
-            JSON object with rewrite rules summary and statistics
-        """
+        """List pattern-based rewrite rules for domain. Returns summary with statistics and samples."""
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -66,7 +58,6 @@ def register_rewrite_tools(mcp: FastMCP):
             raise
 
     @mcp.tool(
-        tags={"rewrite", "read", "details"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -76,15 +67,7 @@ def register_rewrite_tools(mcp: FastMCP):
     async def get_rewrite(
         name: str, ctx: Context, domain: str | None = None
     ) -> Dict[str, Any]:
-        """Get detailed information about a specific rewrite rule.
-
-        Args:
-            name: Unique identifier/slug of the rewrite rule
-            domain: Domain name. If not provided, uses MIGADU_DOMAIN.
-
-        Returns:
-            JSON object with complete rewrite rule configuration
-        """
+        """Get detailed rewrite rule configuration. Requires rule name/slug."""
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -145,7 +128,6 @@ def register_rewrite_tools(mcp: FastMCP):
         return {"rewrite": result, "name": name, "domain": domain, "success": True}
 
     @mcp.tool(
-        tags={"rewrite", "create", "pattern"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -156,25 +138,7 @@ def register_rewrite_tools(mcp: FastMCP):
     async def create_rewrite(
         rewrites: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Create one or more pattern-based rewrite rules for dynamic email forwarding.
-
-        Args:
-            rewrites: List of rewrite specifications. Each dict should contain:
-                - name: Unique identifier/slug for the rule (required)
-                - local_part_rule: Pattern to match (e.g., 'demo-*', 'support-*') (required)
-                - destinations: List of email addresses to forward to (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with created rewrite rule(s) information
-
-        Examples:
-            Single: [{"name": "demo-catchall", "local_part_rule": "demo-*", "destinations": ["admin@company.com"]}]
-            Bulk: [
-                {"name": "demo-catchall", "local_part_rule": "demo-*", "destinations": ["admin@company.com"]},
-                {"name": "support-routing", "local_part_rule": "support-*", "destinations": ["help@company.com"]}
-            ]
-        """
+        """Create pattern-based rewrite rules. List of dicts with: name, local_part_rule, destinations (required), domain (optional)."""
         count = len(list(ensure_iterable(rewrites)))
         await log_bulk_operation_start(ctx, "Creating", count, "rewrite rule")
 
@@ -221,7 +185,6 @@ def register_rewrite_tools(mcp: FastMCP):
         return {"rewrite": result, "name": name, "domain": domain, "success": True}
 
     @mcp.tool(
-        tags={"rewrite", "update", "pattern"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -232,26 +195,7 @@ def register_rewrite_tools(mcp: FastMCP):
     async def update_rewrite(
         updates: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Update configuration for one or more rewrite rules.
-
-        Args:
-            updates: List of rewrite update specifications. Each dict should contain:
-                - name: Current identifier/slug of the rule (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-                - new_name: New identifier/slug (optional)
-                - local_part_rule: New pattern to match (optional)
-                - destinations: New list of destinations (optional)
-
-        Returns:
-            JSON object with updated rewrite rule configuration(s)
-
-        Examples:
-            Single: [{"name": "demo-catchall", "destinations": ["newadmin@company.com"]}]
-            Bulk: [
-                {"name": "demo-catchall", "local_part_rule": "test-*"},
-                {"name": "support-routing", "new_name": "help-routing"}
-            ]
-        """
+        """Update rewrite rule configuration. List of dicts with: name (required), domain, new_name, local_part_rule, destinations (optional)."""
         count = len(list(ensure_iterable(updates)))
         await log_bulk_operation_start(ctx, "Updating", count, "rewrite rule")
 
@@ -288,7 +232,6 @@ def register_rewrite_tools(mcp: FastMCP):
         return {"deleted": f"{name}@{domain}", "success": True}
 
     @mcp.tool(
-        tags={"rewrite", "delete", "destructive"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": True,
@@ -299,20 +242,7 @@ def register_rewrite_tools(mcp: FastMCP):
     async def delete_rewrite(
         targets: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Delete one or more rewrite rules.
-
-        Args:
-            targets: List of deletion specifications. Each dict should contain:
-                - name: Identifier/slug of the rule to delete (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with deletion results
-
-        Examples:
-            Single: [{"name": "demo-catchall"}]
-            Bulk: [{"name": "demo-catchall"}, {"name": "support-routing", "domain": "other.com"}]
-        """
+        """Delete rewrite rules. DESTRUCTIVE: Cannot be undone. List of dicts with: name (required), domain (optional)."""
         count = len(list(ensure_iterable(targets)))
         await log_bulk_operation_start(ctx, "Deleting", count, "rewrite rule")
         await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")

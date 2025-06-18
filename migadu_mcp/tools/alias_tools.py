@@ -30,7 +30,6 @@ def register_alias_tools(mcp: FastMCP):
     """Register alias tools using List[Dict] + iterator pattern"""
 
     @mcp.tool(
-        tags={"alias", "read", "list"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -39,10 +38,10 @@ def register_alias_tools(mcp: FastMCP):
     )
     @with_context_protection(max_tokens=2000)
     async def list_aliases(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
-        """List all email aliases for a domain. Returns summary with statistics and samples.
+        """List email aliases for domain. Returns summary with statistics and samples.
 
         Args:
-            domain: Domain name (e.g., 'mydomain.org'). If not provided, uses MIGADU_DOMAIN.
+            domain: Domain name. Uses MIGADU_DOMAIN if not provided.
 
         Returns:
             JSON object with alias summary and statistics
@@ -67,7 +66,6 @@ def register_alias_tools(mcp: FastMCP):
             raise
 
     @mcp.tool(
-        tags={"alias", "read", "details"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -77,11 +75,11 @@ def register_alias_tools(mcp: FastMCP):
     async def get_alias(
         target: str, ctx: Context, domain: str | None = None
     ) -> Dict[str, Any]:
-        """Get detailed information about a specific alias.
+        """Get detailed alias information.
 
         Args:
-            target: Local part of alias (e.g., 'sales' for sales@domain.com)
-            domain: Domain name. If not provided, uses MIGADU_DOMAIN.
+            target: Local part of alias
+            domain: Domain name. Uses MIGADU_DOMAIN if not provided.
 
         Returns:
             JSON object with complete alias configuration
@@ -145,7 +143,6 @@ def register_alias_tools(mcp: FastMCP):
         return {"alias": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"alias", "create", "forwarding"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -156,25 +153,7 @@ def register_alias_tools(mcp: FastMCP):
     async def create_alias(
         aliases: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Create one or more email aliases with forwarding.
-
-        Args:
-            aliases: List of alias specifications. Each dict should contain:
-                - target: Local part of alias (required)
-                - destinations: List of email addresses to forward to (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-                - is_internal: Internal-only flag (optional, default: false)
-
-        Returns:
-            JSON object with created alias(es) information
-
-        Examples:
-            Single: [{"target": "sales", "destinations": ["bob@company.com", "alice@company.com"]}]
-            Bulk: [
-                {"target": "sales", "destinations": ["bob@company.com"]},
-                {"target": "support", "destinations": ["help@company.com"], "domain": "other.com"}
-            ]
-        """
+        """Create email aliases with forwarding. List of dicts with: target (local part), destinations (email list), domain (optional), is_internal (optional)."""
         count = len(list(ensure_iterable(aliases)))
         await log_bulk_operation_start(ctx, "Creating", count, "alias")
 
@@ -215,7 +194,6 @@ def register_alias_tools(mcp: FastMCP):
         return {"alias": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"alias", "update", "forwarding"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -226,24 +204,7 @@ def register_alias_tools(mcp: FastMCP):
     async def update_alias(
         updates: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Update destination addresses for one or more aliases.
-
-        Args:
-            updates: List of alias update specifications. Each dict should contain:
-                - target: Local part of alias (required)
-                - destinations: New list of email addresses to forward to (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with updated alias configuration(s)
-
-        Examples:
-            Single: [{"target": "sales", "destinations": ["newteam@company.com"]}]
-            Bulk: [
-                {"target": "sales", "destinations": ["bob@company.com", "carol@company.com"]},
-                {"target": "support", "destinations": ["help@company.com"]}
-            ]
-        """
+        """Update alias destinations. List of dicts with: target (local part), destinations (email list), domain (optional)."""
         count = len(list(ensure_iterable(updates)))
         await log_bulk_operation_start(ctx, "Updating", count, "alias")
 
@@ -279,7 +240,6 @@ def register_alias_tools(mcp: FastMCP):
         return {"deleted": email_address, "success": True}
 
     @mcp.tool(
-        tags={"alias", "delete", "destructive"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": True,
@@ -290,20 +250,7 @@ def register_alias_tools(mcp: FastMCP):
     async def delete_alias(
         targets: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Delete one or more aliases.
-
-        Args:
-            targets: List of deletion specifications. Each dict should contain:
-                - target: Local part of alias (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with deletion results
-
-        Examples:
-            Single: [{"target": "sales"}]
-            Bulk: [{"target": "sales"}, {"target": "support", "domain": "other.com"}]
-        """
+        """Delete aliases. DESTRUCTIVE: Cannot be undone. List of dicts with: target (local part), domain (optional)."""
         count = len(list(ensure_iterable(targets)))
         await log_bulk_operation_start(ctx, "Deleting", count, "alias")
         await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")

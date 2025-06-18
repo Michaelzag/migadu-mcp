@@ -30,7 +30,6 @@ def register_identity_tools(mcp: FastMCP):
     """Register identity tools using List[Dict] + iterator pattern"""
 
     @mcp.tool(
-        tags={"identity", "read", "list"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -41,15 +40,7 @@ def register_identity_tools(mcp: FastMCP):
     async def list_identities(
         mailbox: str, ctx: Context, domain: str | None = None
     ) -> Dict[str, Any]:
-        """List all email identities for a mailbox. Returns summary with statistics and samples.
-
-        Args:
-            mailbox: Username of the mailbox that owns identities
-            domain: Domain name. If not provided, uses MIGADU_DOMAIN.
-
-        Returns:
-            JSON object with identity summary and statistics
-        """
+        """List email identities for mailbox. Returns summary with statistics and samples."""
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -106,7 +97,6 @@ def register_identity_tools(mcp: FastMCP):
         return {"identity": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"identity", "create", "send-as"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -117,26 +107,7 @@ def register_identity_tools(mcp: FastMCP):
     async def create_identity(
         identities: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Create one or more email identities for mailboxes.
-
-        Args:
-            identities: List of identity specifications. Each dict should contain:
-                - target: Local part of identity address (required)
-                - mailbox: Username of mailbox that owns this identity (required)
-                - name: Display name for identity (required)
-                - password: Password for SMTP authentication (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with created identity(ies) information
-
-        Examples:
-            Single: [{"target": "support", "mailbox": "john", "name": "Support Team", "password": "secret123"}]
-            Bulk: [
-                {"target": "support", "mailbox": "john", "name": "Support", "password": "secret123"},
-                {"target": "sales", "mailbox": "jane", "name": "Sales Team", "password": "secret456"}
-            ]
-        """
+        """Create email identities. List of dicts with: target, mailbox, name, password (required), domain (optional)."""
         count = len(list(ensure_iterable(identities)))
         await log_bulk_operation_start(ctx, "Creating", count, "identity")
 
@@ -176,7 +147,6 @@ def register_identity_tools(mcp: FastMCP):
         return {"identity": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"identity", "update", "configuration"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -187,27 +157,7 @@ def register_identity_tools(mcp: FastMCP):
     async def update_identity(
         updates: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Update settings for one or more identities.
-
-        Args:
-            updates: List of identity update specifications. Each dict should contain:
-                - target: Local part of identity address (required)
-                - mailbox: Username of mailbox that owns this identity (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-                - name: Update display name (optional)
-                - may_send: Allow/deny sending from identity (optional)
-                - may_receive: Allow/deny receiving to identity (optional)
-
-        Returns:
-            JSON object with updated identity configuration(s)
-
-        Examples:
-            Single: [{"target": "support", "mailbox": "john", "may_send": false}]
-            Bulk: [
-                {"target": "support", "mailbox": "john", "name": "Support Team Updated"},
-                {"target": "sales", "mailbox": "jane", "may_receive": false}
-            ]
-        """
+        """Update identity settings. List of dicts with: target, mailbox (required), domain, name, may_send, may_receive (optional)."""
         count = len(list(ensure_iterable(updates)))
         await log_bulk_operation_start(ctx, "Updating", count, "identity")
 
@@ -242,7 +192,6 @@ def register_identity_tools(mcp: FastMCP):
         return {"deleted": email_address, "success": True}
 
     @mcp.tool(
-        tags={"identity", "delete", "destructive"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": True,
@@ -253,24 +202,7 @@ def register_identity_tools(mcp: FastMCP):
     async def delete_identity(
         targets: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Delete one or more identities.
-
-        Args:
-            targets: List of deletion specifications. Each dict should contain:
-                - target: Local part of identity address (required)
-                - mailbox: Username of mailbox that owns this identity (required)
-                - domain: Domain name (optional, uses MIGADU_DOMAIN if not provided)
-
-        Returns:
-            JSON object with deletion results
-
-        Examples:
-            Single: [{"target": "support", "mailbox": "john"}]
-            Bulk: [
-                {"target": "support", "mailbox": "john"},
-                {"target": "sales", "mailbox": "jane", "domain": "other.com"}
-            ]
-        """
+        """Delete identities. DESTRUCTIVE: Cannot be undone. List of dicts with: target, mailbox (required), domain (optional)."""
         count = len(list(ensure_iterable(targets)))
         await log_bulk_operation_start(ctx, "Deleting", count, "identity")
         await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")

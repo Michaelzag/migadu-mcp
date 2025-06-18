@@ -32,7 +32,6 @@ def register_mailbox_tools(mcp: FastMCP):
     """Register mailbox tools using List[Dict] + iterator pattern"""
 
     @mcp.tool(
-        tags={"mailbox", "read", "list"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -41,10 +40,10 @@ def register_mailbox_tools(mcp: FastMCP):
     )
     @with_context_protection(max_tokens=2000)
     async def list_mailboxes(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
-        """List all email mailboxes for a domain. Returns summary with statistics and samples.
+        """List email mailboxes for domain. Returns summary with statistics and samples.
 
         Args:
-            domain: Domain name (e.g., 'mydomain.org'). If not provided, uses MIGADU_DOMAIN.
+            domain: Domain name. Uses MIGADU_DOMAIN if not provided.
 
         Returns:
             JSON object with mailbox summary and statistics
@@ -69,7 +68,6 @@ def register_mailbox_tools(mcp: FastMCP):
             raise
 
     @mcp.tool(
-        tags={"mailbox", "read", "details"},
         annotations={
             "readOnlyHint": True,
             "idempotentHint": True,
@@ -77,10 +75,10 @@ def register_mailbox_tools(mcp: FastMCP):
         },
     )
     async def get_mailbox(target: str, ctx: Context) -> Dict[str, Any]:
-        """Get detailed information about a specific mailbox with smart domain resolution.
+        """Get detailed mailbox information with smart domain resolution.
 
         Args:
-            target: Email address (user@domain.com) or local part (user) if MIGADU_DOMAIN is set
+            target: Email address or local part if MIGADU_DOMAIN set
 
         Returns:
             JSON object with complete mailbox configuration
@@ -139,7 +137,6 @@ def register_mailbox_tools(mcp: FastMCP):
         return {"mailbox": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"mailbox", "create", "account"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -150,27 +147,7 @@ def register_mailbox_tools(mcp: FastMCP):
     async def create_mailbox(
         mailboxes: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Create one or more email mailboxes with smart domain resolution.
-
-        Args:
-            mailboxes: List of mailbox specifications. Each dict should contain:
-                - target: Email address or local part (required)
-                - name: Display name (required)
-                - password: Password or null for invitation method (optional)
-                - password_recovery_email: Recovery email for invitation (optional)
-                - is_internal: Internal-only flag (optional, default: false)
-                - forwarding_to: External forwarding address (optional)
-
-        Returns:
-            JSON object with created mailbox(es) information
-
-        Examples:
-            Single: [{"target": "april", "name": "April Berry"}]
-            Bulk: [
-                {"target": "april", "name": "April Berry", "password": "secret123"},
-                {"target": "bob@company.com", "name": "Bob Smith", "is_internal": true}
-            ]
-        """
+        """Create email mailboxes. List of dicts with: target (email/local), name (display), password (optional), recovery_email (optional), is_internal (optional), forwarding_to (optional)."""
         count = len(list(ensure_iterable(mailboxes)))
         await log_bulk_operation_start(ctx, "Creating", count, "mailbox")
 
@@ -217,7 +194,6 @@ def register_mailbox_tools(mcp: FastMCP):
         return {"mailbox": result, "email_address": email_address, "success": True}
 
     @mcp.tool(
-        tags={"mailbox", "update", "configuration"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -228,29 +204,7 @@ def register_mailbox_tools(mcp: FastMCP):
     async def update_mailbox(
         updates: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Update configuration settings for one or more mailboxes.
-
-        Args:
-            updates: List of update specifications. Each dict should contain:
-                - target: Email address or local part (required)
-                - name: Update display name (optional)
-                - may_send: Allow/deny sending emails (optional)
-                - may_receive: Allow/deny receiving emails (optional)
-                - may_access_imap: Allow/deny IMAP access (optional)
-                - may_access_pop3: Allow/deny POP3 access (optional)
-                - spam_action: Spam handling ("folder", "reject", etc.) (optional)
-                - spam_aggressiveness: Spam filtering sensitivity (optional)
-
-        Returns:
-            JSON object with updated mailbox configuration(s)
-
-        Examples:
-            Single: [{"target": "april", "may_send": false}]
-            Bulk: [
-                {"target": "april", "name": "April Berry (Updated)"},
-                {"target": "bob", "spam_action": "reject"}
-            ]
-        """
+        """Update mailbox settings. List of dicts with: target (required), name (optional), may_send (optional), may_receive (optional), may_access_imap (optional), may_access_pop3 (optional), spam_action (optional), spam_aggressiveness (optional)."""
         count = len(list(ensure_iterable(updates)))
         await log_bulk_operation_start(ctx, "Updating", count, "mailbox")
 
@@ -280,7 +234,6 @@ def register_mailbox_tools(mcp: FastMCP):
         return {"deleted": email_address, "success": True}
 
     @mcp.tool(
-        tags={"mailbox", "delete", "destructive"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": True,
@@ -291,19 +244,7 @@ def register_mailbox_tools(mcp: FastMCP):
     async def delete_mailbox(
         targets: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Delete one or more mailboxes with smart domain resolution.
-
-        Args:
-            targets: List of deletion specifications. Each dict should contain:
-                - target: Email address or local part (required)
-
-        Returns:
-            JSON object with deletion results
-
-        Examples:
-            Single: [{"target": "april"}]
-            Bulk: [{"target": "april"}, {"target": "bob@company.com"}]
-        """
+        """Delete mailboxes. DESTRUCTIVE: Cannot be undone. List of dicts with: target (email/local)."""
         count = len(list(ensure_iterable(targets)))
         await log_bulk_operation_start(ctx, "Deleting", count, "mailbox")
         await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")
@@ -335,7 +276,6 @@ def register_mailbox_tools(mcp: FastMCP):
         return {"reset": email_address, "success": True}
 
     @mcp.tool(
-        tags={"mailbox", "password", "security"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -346,23 +286,7 @@ def register_mailbox_tools(mcp: FastMCP):
     async def reset_mailbox_password(
         resets: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Reset passwords for one or more mailboxes.
-
-        Args:
-            resets: List of password reset specifications. Each dict should contain:
-                - target: Email address or local part (required)
-                - new_password: The new password for authentication (required)
-
-        Returns:
-            JSON object confirming password updates
-
-        Examples:
-            Single: [{"target": "april", "new_password": "newpass123"}]
-            Bulk: [
-                {"target": "april", "new_password": "newpass123"},
-                {"target": "bob", "new_password": "bobpass456"}
-            ]
-        """
+        """Reset mailbox passwords. List of dicts with: target (email/local), new_password (required)."""
         count = len(list(ensure_iterable(resets)))
         await log_bulk_operation_start(ctx, "Resetting passwords for", count, "mailbox")
 
@@ -407,7 +331,6 @@ def register_mailbox_tools(mcp: FastMCP):
         }
 
     @mcp.tool(
-        tags={"mailbox", "autoresponder", "configuration"},
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -418,26 +341,7 @@ def register_mailbox_tools(mcp: FastMCP):
     async def set_autoresponder(
         autoresponders: List[Dict[str, Any]], ctx: Context
     ) -> Dict[str, Any]:
-        """Configure automatic email responses for one or more mailboxes.
-
-        Args:
-            autoresponders: List of autoresponder specifications. Each dict should contain:
-                - target: Email address or local part (required)
-                - active: Whether autoresponder is enabled (required)
-                - subject: Subject line for replies (optional)
-                - body: Message content for replies (optional)
-                - expires_on: Expiration date YYYY-MM-DD (optional)
-
-        Returns:
-            JSON object confirming autoresponder configuration
-
-        Examples:
-            Single: [{"target": "april", "active": true, "subject": "Out of Office"}]
-            Bulk: [
-                {"target": "april", "active": true, "body": "I'm on vacation"},
-                {"target": "bob", "active": false}
-            ]
-        """
+        """Configure mailbox autoresponders. List of dicts with: target (email/local), active (required), subject (optional), body (optional), expires_on (optional)."""
         count = len(list(ensure_iterable(autoresponders)))
         await log_bulk_operation_start(
             ctx, "Configuring autoresponders for", count, "mailbox"
