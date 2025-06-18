@@ -13,12 +13,15 @@ from migadu_mcp.utils.tool_helpers import (
     log_operation_error,
 )
 from migadu_mcp.utils.bulk_processing import (
-    bulk_processor,
+    bulk_processor_with_schema,
     ensure_iterable,
     log_bulk_operation_start,
     log_bulk_operation_result,
-    validate_required_fields,
-    get_field_with_default,
+)
+from migadu_mcp.utils.schemas import (
+    IdentityCreateRequest,
+    IdentityUpdateRequest,
+    IdentityDeleteRequest,
 )
 from migadu_mcp.utils.email_parsing import format_email_address
 
@@ -70,24 +73,13 @@ def register_identity_tools(mcp: FastMCP):
             )
             raise
 
-    @bulk_processor
+    @bulk_processor_with_schema(IdentityCreateRequest)
     async def process_create_identity(
-        item: Dict[str, Any], ctx: Context
+        validated_item: IdentityCreateRequest, ctx: Context
     ) -> Dict[str, Any]:
         """Process a single identity creation"""
-        # Validate required fields
-        validate_required_fields(
-            item, ["target", "mailbox", "name", "password"], "create_identity"
-        )
-
-        # Extract fields with defaults
-        target = item["target"]
-        mailbox = item["mailbox"]
-        name = item["name"]
-        password = item["password"]
-        domain = get_field_with_default(item, "domain")
-
         # Get domain if not provided
+        domain = validated_item.domain
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -96,13 +88,15 @@ def register_identity_tools(mcp: FastMCP):
             if not domain:
                 raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
 
-        email_address = format_email_address(domain, target)
+        email_address = format_email_address(domain, validated_item.target)
         await log_operation_start(
-            ctx, "Creating identity", f"{email_address} for {mailbox}"
+            ctx, "Creating identity", f"{email_address} for {validated_item.mailbox}"
         )
 
         service = get_service_factory().identity_service()
-        result = await service.create_identity(domain, mailbox, target, name, password)
+        result = await service.create_identity(
+            domain, validated_item.mailbox, validated_item.target, validated_item.name, validated_item.password
+        )
 
         await log_operation_success(ctx, "Created identity", email_address)
         return {"identity": result, "email_address": email_address, "success": True}
@@ -146,23 +140,13 @@ def register_identity_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Identity creation", result, "identity")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(IdentityUpdateRequest)
     async def process_update_identity(
-        item: Dict[str, Any], ctx: Context
+        validated_item: IdentityUpdateRequest, ctx: Context
     ) -> Dict[str, Any]:
         """Process a single identity update"""
-        # Validate required fields
-        validate_required_fields(item, ["target", "mailbox"], "update_identity")
-
-        # Extract fields with defaults
-        target = item["target"]
-        mailbox = item["mailbox"]
-        domain = get_field_with_default(item, "domain")
-        name = get_field_with_default(item, "name")
-        may_send = get_field_with_default(item, "may_send")
-        may_receive = get_field_with_default(item, "may_receive")
-
         # Get domain if not provided
+        domain = validated_item.domain
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -171,12 +155,12 @@ def register_identity_tools(mcp: FastMCP):
             if not domain:
                 raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
 
-        email_address = format_email_address(domain, target)
+        email_address = format_email_address(domain, validated_item.target)
         await log_operation_start(ctx, "Updating identity", email_address)
 
         service = get_service_factory().identity_service()
         result = await service.update_identity(
-            domain, mailbox, target, name, may_send, may_receive
+            domain, validated_item.mailbox, validated_item.target, validated_item.name, validated_item.may_send, validated_item.may_receive
         )
 
         await log_operation_success(ctx, "Updated identity", email_address)
@@ -222,20 +206,13 @@ def register_identity_tools(mcp: FastMCP):
         await log_bulk_operation_result(ctx, "Identity update", result, "identity")
         return result
 
-    @bulk_processor
+    @bulk_processor_with_schema(IdentityDeleteRequest)
     async def process_delete_identity(
-        item: Dict[str, Any], ctx: Context
+        validated_item: IdentityDeleteRequest, ctx: Context
     ) -> Dict[str, Any]:
         """Process a single identity deletion"""
-        # Validate required fields
-        validate_required_fields(item, ["target", "mailbox"], "delete_identity")
-
-        # Extract fields with defaults
-        target = item["target"]
-        mailbox = item["mailbox"]
-        domain = get_field_with_default(item, "domain")
-
         # Get domain if not provided
+        domain = validated_item.domain
         if domain is None:
             from migadu_mcp.config import get_config
 
@@ -244,11 +221,11 @@ def register_identity_tools(mcp: FastMCP):
             if not domain:
                 raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
 
-        email_address = format_email_address(domain, target)
+        email_address = format_email_address(domain, validated_item.target)
         await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting identity {email_address}")
 
         service = get_service_factory().identity_service()
-        await service.delete_identity(domain, mailbox, target)
+        await service.delete_identity(domain, validated_item.mailbox, validated_item.target)
 
         await log_operation_success(ctx, "Deleted identity", email_address)
         return {"deleted": email_address, "success": True}
