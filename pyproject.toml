@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=45", "wheel", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "migadu-mcp"
-version = "3.4.0"
+dynamic = ["version"]
 description = "Professional FastMCP server for comprehensive Migadu email management with Context logging, tool annotations, and testing infrastructure"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -36,10 +36,10 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.0.0",
     "python-dotenv>=1.0.0",
-    "twine>=6.1.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "bandit>=1.7.0",
+    "setuptools_scm>=8.0.0",
 ]
 
 [project.urls]
@@ -53,6 +53,10 @@ migadu-mcp = "migadu_mcp.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["migadu_mcp*"]
+
+[tool.setuptools_scm]
+# Version from git tags
+fallback_version = "0.0.0+dev"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

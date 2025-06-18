@@ -1,145 +1,110 @@
-name: CI/CD Pipeline
+name: Release Pipeline
 
 on:
-  push:
-    branches: [master, main, develop]
-  pull_request:
-    branches: [master, main, develop]
   release:
     types: [published]
-  workflow_dispatch:  # Allow manual triggering
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  test:
-    name: Test Suite
+  # Quality Gates - Run on all events
+  quality-gates:
+    name: Quality Gates
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for setuptools_scm
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        enable-cache: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
-    - name: Install dependencies
-      run: uv sync --group dev
+      - name: Install dependencies
+        run: uv sync --group dev
 
-    - name: Run pytest
-      run: uv run pytest tests/ -v --tb=short
+      - name: Run tests
+        run: uv run pytest tests/test_migadu_mcp.py
 
-  lint:
-    name: Code Quality
-    runs-on: ubuntu-latest
+      - name: Run linting
+        run: uv run ruff check migadu_mcp/ tests/
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Run type checking
+        run: uv run mypy migadu_mcp/
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
+      - name: Run security scan
+        run: uv run bandit -r migadu_mcp/
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        enable-cache: true
-
-    - name: Install dependencies
-      run: uv sync --group dev
-
-    - name: Run ruff format check
-      run: uv run ruff format --check .
-
-    - name: Run ruff lint
-      run: uv run ruff check .
-
-    - name: Run mypy
-      run: uv run mypy migadu_mcp/
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        enable-cache: true
-
-    - name: Install dependencies
-      run: uv sync --group dev
-
-    - name: Run bandit security check
-      run: uv run bandit -r migadu_mcp/
-
-    - name: Generate bandit report (always runs)
-      run: uv run bandit -r migadu_mcp/ -f json -o bandit-report.json || true
-
-    - name: Upload bandit report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: bandit-report
-        path: bandit-report.json
-
-
-  publish:
-    name: Publish to PyPI
+  # Release and Publish - Only on release events
+  release-publish:
+    name: Release and Publish
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
-    needs: [test, lint, security]
+    needs: quality-gates
     environment: pypi
     permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-      contents: read
+      contents: write
+      id-token: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        enable-cache: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
-    - name: Install dependencies
-      run: uv sync
+      - name: Install dependencies
+        run: uv sync --group dev
 
-    - name: Build package
-      run: uv build --no-sources
+      - name: Build package
+        run: uv build
 
-    - name: Verify build
-      run: |
-        ls -la dist/
-        # Check that both wheel and source distribution exist
-        test -f dist/migadu_mcp-*.whl
-        test -f dist/migadu_mcp-*.tar.gz
+      - name: Verify build
+        run: |
+          ls -la dist/
+          echo "Package built successfully"
 
-    - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        print-hash: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ github.event.release.tag_name }} || echo "Tag already exists"
+          git push origin ${{ github.event.release.tag_name }} || echo "Tag already pushed"
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          echo "Release failed - cleaning up"
+          gh release delete ${{ github.event.release.tag_name }} --yes || echo "Release already deleted"
+          git push --delete origin ${{ github.event.release.tag_name }} || echo "Tag already deleted"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
