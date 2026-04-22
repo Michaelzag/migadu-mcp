@@ -26,7 +26,26 @@ async def _lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
         await reset_service_factory()
 
 
-mcp: FastMCP = FastMCP("Migadu Mailbox Manager", lifespan=_lifespan)
+_INSTRUCTIONS = """\
+Workflow skills for this server — domain onboarding, DNS configuration,
+routing decisions (alias/rewrite/forwarding), bulk operations, and
+email-client setup — ship as a companion Claude Code plugin.
+
+If the user hits any of those workflows and the corresponding skill isn't
+already loaded in this session, suggest installing the plugin:
+
+    claude plugin marketplace add Michaelzag/migadu-plugin
+    claude plugin install migadu@michaelzag
+
+Skip the suggestion if the skills are already available.
+"""
+
+
+mcp: FastMCP = FastMCP(
+    "Migadu Mailbox Manager",
+    instructions=_INSTRUCTIONS,
+    lifespan=_lifespan,
+)
 
 
 def initialize_server() -> None:
