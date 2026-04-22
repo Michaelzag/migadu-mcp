@@ -1,56 +1,45 @@
-#!/usr/bin/env python3
-"""
-Alias service for Migadu API operations
-"""
+"""Alias service for the Migadu API."""
 
-from typing import Dict, Any, List
+from __future__ import annotations
+
+from typing import Any
+
 from migadu_mcp.client.migadu_client import MigaduClient
 
 
 class AliasService:
-    """Service for alias operations"""
+    """CRUD for forwarding aliases (no storage, just destination rules)."""
 
-    def __init__(self, client: MigaduClient):
+    def __init__(self, client: MigaduClient) -> None:
         self.client = client
 
-    async def list_aliases(self, domain: str) -> Dict[str, Any]:
-        """List all aliases for a domain"""
-        return await self.client.request("GET", f"/domains/{domain}/aliases")
+    async def list_aliases(self, domain: str) -> dict[str, Any]:
+        return await self.client.get(f"/domains/{domain}/aliases")
+
+    async def get_alias(self, domain: str, local_part: str) -> dict[str, Any]:
+        return await self.client.get(f"/domains/{domain}/aliases/{local_part}")
 
     async def create_alias(
         self,
         domain: str,
         local_part: str,
-        destinations: List[str],
+        destinations: list[str],
         is_internal: bool = False,
-    ) -> Dict[str, Any]:
-        """Create a new alias"""
+    ) -> dict[str, Any]:
         data = {
             "local_part": local_part,
             "destinations": ",".join(destinations),
             "is_internal": is_internal,
         }
-        return await self.client.request(
-            "POST", f"/domains/{domain}/aliases", json=data
-        )
-
-    async def get_alias(self, domain: str, local_part: str) -> Dict[str, Any]:
-        """Get details of a specific alias"""
-        return await self.client.request(
-            "GET", f"/domains/{domain}/aliases/{local_part}"
-        )
+        return await self.client.post(f"/domains/{domain}/aliases", json=data)
 
     async def update_alias(
-        self, domain: str, local_part: str, destinations: List[str]
-    ) -> Dict[str, Any]:
-        """Update alias destinations"""
-        data = {"destinations": ",".join(destinations)}
-        return await self.client.request(
-            "PUT", f"/domains/{domain}/aliases/{local_part}", json=data
+        self, domain: str, local_part: str, destinations: list[str]
+    ) -> dict[str, Any]:
+        return await self.client.put(
+            f"/domains/{domain}/aliases/{local_part}",
+            json={"destinations": ",".join(destinations)},
         )
 
-    async def delete_alias(self, domain: str, local_part: str) -> Dict[str, Any]:
-        """Delete an alias"""
-        return await self.client.request(
-            "DELETE", f"/domains/{domain}/aliases/{local_part}"
-        )
+    async def delete_alias(self, domain: str, local_part: str) -> None:
+        await self.client.delete(f"/domains/{domain}/aliases/{local_part}")

@@ -38,13 +38,13 @@ jobs:
         run: uv sync --group dev
 
       - name: Run tests
-        run: uv run pytest tests/test_migadu_mcp.py
+        run: uv run pytest
 
       - name: Run linting
         run: uv run ruff check migadu_mcp/ tests/
 
       - name: Run type checking
-        run: uv run mypy migadu_mcp/
+        run: uv run ty check migadu_mcp/
 
       - name: Run security scan
         run: uv run bandit -r migadu_mcp/
