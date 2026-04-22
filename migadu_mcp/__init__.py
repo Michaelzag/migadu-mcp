@@ -1,19 +1,12 @@
-"""
-Migadu MCP Server
+"""Migadu MCP server — domains, mailboxes, aliases, identities, forwardings, rewrites."""
 
-MCP server for comprehensive Migadu email management - mailboxes, aliases, identities, forwardings, and rewrites.
-"""
+from importlib.metadata import PackageNotFoundError, version
 
 try:
-    from importlib.metadata import version
     __version__ = version("migadu-mcp")
-except Exception:
-    # Fallback for development or when package not installed
+except PackageNotFoundError:
     __version__ = "0.0.0+dev"
 
-__author__ = "Michael Broel"
-__email__ = "Michael@Michaelzag.com"
-
-from .main import mcp
+from migadu_mcp.main import mcp
 
 __all__ = ["mcp", "__version__"]

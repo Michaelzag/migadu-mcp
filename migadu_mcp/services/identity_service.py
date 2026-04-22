@@ -1,39 +1,41 @@
-#!/usr/bin/env python3
-"""
-Identity service for Migadu API operations
-"""
+"""Identity service for the Migadu API."""
 
-from typing import Dict, Any, Optional
+from __future__ import annotations
+
+from typing import Any
+
 from migadu_mcp.client.migadu_client import MigaduClient
 
 
 class IdentityService:
-    """Service for identity operations"""
+    """Send-as identities attached to a mailbox."""
 
-    def __init__(self, client: MigaduClient):
+    def __init__(self, client: MigaduClient) -> None:
         self.client = client
 
-    async def list_identities(self, domain: str, mailbox: str) -> Dict[str, Any]:
-        """List all identities for a mailbox"""
-        return await self.client.request(
-            "GET", f"/domains/{domain}/mailboxes/{mailbox}/identities"
-        )
-
-    async def create_identity(
-        self, domain: str, mailbox: str, local_part: str, name: str, password: str
-    ) -> Dict[str, Any]:
-        """Create a new identity for a mailbox"""
-        data = {"local_part": local_part, "name": name, "password": password}
-        return await self.client.request(
-            "POST", f"/domains/{domain}/mailboxes/{mailbox}/identities", json=data
+    async def list_identities(self, domain: str, mailbox: str) -> dict[str, Any]:
+        return await self.client.get(
+            f"/domains/{domain}/mailboxes/{mailbox}/identities"
         )
 
     async def get_identity(
         self, domain: str, mailbox: str, identity: str
-    ) -> Dict[str, Any]:
-        """Get details of a specific identity"""
-        return await self.client.request(
-            "GET", f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}"
+    ) -> dict[str, Any]:
+        return await self.client.get(
+            f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}"
+        )
+
+    async def create_identity(
+        self,
+        domain: str,
+        mailbox: str,
+        local_part: str,
+        name: str,
+        password: str,
+    ) -> dict[str, Any]:
+        data = {"local_part": local_part, "name": name, "password": password}
+        return await self.client.post(
+            f"/domains/{domain}/mailboxes/{mailbox}/identities", json=data
         )
 
     async def update_identity(
@@ -41,29 +43,35 @@ class IdentityService:
         domain: str,
         mailbox: str,
         identity: str,
-        name: Optional[str] = None,
-        may_send: Optional[bool] = None,
-        may_receive: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        """Update identity settings"""
-        data: Dict[str, Any] = {}
-        if name is not None:
-            data["name"] = name
-        if may_send is not None:
-            data["may_send"] = may_send
-        if may_receive is not None:
-            data["may_receive"] = may_receive
-
-        return await self.client.request(
-            "PUT",
-            f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}",
-            json=data,
+        name: str | None = None,
+        may_send: bool | None = None,
+        may_receive: bool | None = None,
+        may_access_imap: bool | None = None,
+        may_access_pop3: bool | None = None,
+        may_access_managesieve: bool | None = None,
+        footer_active: bool | None = None,
+        footer_plain_body: str | None = None,
+        footer_html_body: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for key, value in [
+            ("name", name),
+            ("may_send", may_send),
+            ("may_receive", may_receive),
+            ("may_access_imap", may_access_imap),
+            ("may_access_pop3", may_access_pop3),
+            ("may_access_managesieve", may_access_managesieve),
+            ("footer_active", footer_active),
+            ("footer_plain_body", footer_plain_body),
+            ("footer_html_body", footer_html_body),
+        ]:
+            if value is not None:
+                data[key] = value
+        return await self.client.put(
+            f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}", json=data
         )
 
-    async def delete_identity(
-        self, domain: str, mailbox: str, identity: str
-    ) -> Dict[str, Any]:
-        """Delete an identity"""
-        return await self.client.request(
-            "DELETE", f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}"
+    async def delete_identity(self, domain: str, mailbox: str, identity: str) -> None:
+        await self.client.delete(
+            f"/domains/{domain}/mailboxes/{mailbox}/identities/{identity}"
         )

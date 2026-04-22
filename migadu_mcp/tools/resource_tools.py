@@ -1,177 +1,154 @@
-#!/usr/bin/env python3
-"""
-MCP resources for Migadu API
-"""
+"""MCP resources for Migadu — read-only views mapped to URI templates."""
 
-from typing import Dict, Any
-from fastmcp import FastMCP, Context
+from typing import Any
+
+from fastmcp import Context, FastMCP
+
 from migadu_mcp.services.service_factory import get_service_factory
 
 
-def register_resources(mcp: FastMCP):
-    """Register resources with FastMCP instance"""
+def register_resources(mcp: FastMCP) -> None:
+    # --- Domain-level ---
+
+    @mcp.resource(
+        "domains://",
+        name="All Domains",
+        description="All domains for the authenticated account",
+        mime_type="application/json",
+        tags={"domain", "account", "inventory"},
+    )
+    async def all_domains(ctx: Context) -> dict[str, Any]:
+        await ctx.info("📋 Loading all domains")
+        return await get_service_factory().domain_service().list_domains()
+
+    @mcp.resource(
+        "domain://{name}",
+        name="Domain Details",
+        description="Full configuration details for a specific domain",
+        mime_type="application/json",
+        tags={"domain", "configuration"},
+    )
+    async def domain_details(name: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading domain {name}")
+        return await get_service_factory().domain_service().get_domain(name)
+
+    @mcp.resource(
+        "domain-records://{name}",
+        name="Domain DNS Records",
+        description="DNS records required to set up a domain (MX, SPF, DKIM, DMARC, verification)",
+        mime_type="application/json",
+        tags={"domain", "dns", "setup"},
+    )
+    async def domain_records(name: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading DNS records for {name}")
+        return await get_service_factory().domain_service().get_domain_records(name)
+
+    @mcp.resource(
+        "domain-usage://{name}",
+        name="Domain Usage",
+        description="Message and storage usage metrics for a domain",
+        mime_type="application/json",
+        tags={"domain", "metrics", "usage"},
+    )
+    async def domain_usage(name: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading usage for {name}")
+        return await get_service_factory().domain_service().get_domain_usage(name)
+
+    # --- Mailbox-level ---
 
     @mcp.resource(
         "mailboxes://{domain}",
         name="Domain Mailboxes",
-        description="Comprehensive overview of all email mailboxes configured for a domain",
+        description="All email mailboxes for a domain",
         mime_type="application/json",
-        tags={"mailbox", "domain", "inventory", "audit"},
+        tags={"mailbox", "domain", "inventory"},
     )
-    async def domain_mailboxes(domain: str, ctx: Context) -> Dict[str, Any]:
-        """Resource providing comprehensive overview of all email mailboxes configured for a domain.
-        Returns detailed information for each mailbox including storage status, permissions, spam settings,
-        autoresponder configuration, and account security options. Use this resource for domain-wide
-        mailbox auditing, capacity planning, and organizational email infrastructure analysis.
-
-        URI Format: mailboxes://example.org
-        """
-        await ctx.info(f"📋 Loading mailbox inventory for domain: {domain}")
-
-        try:
-            factory = get_service_factory()
-            service = factory.mailbox_service()
-            result = await service.list_mailboxes(domain)
-            count = len(result.get("mailboxes", []))
-            await ctx.info(f"✅ Loaded {count} mailboxes for {domain}")
-            return result
-        except Exception as e:
-            await ctx.error(f"❌ Failed to load mailboxes for {domain}: {str(e)}")
-            raise
+    async def domain_mailboxes(domain: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading mailboxes for {domain}")
+        return await get_service_factory().mailbox_service().list_mailboxes(domain)
 
     @mcp.resource(
         "mailbox://{domain}/{local_part}",
         name="Mailbox Details",
-        description="Complete configuration and status details for a specific email mailbox",
+        description="Full configuration for a specific mailbox",
         mime_type="application/json",
-        tags={"mailbox", "details", "configuration", "troubleshooting"},
+        tags={"mailbox", "configuration"},
     )
     async def mailbox_details(
         domain: str, local_part: str, ctx: Context
-    ) -> Dict[str, Any]:
-        """Resource providing complete configuration details for a specific email mailbox. Includes
-        authentication settings, protocol permissions (IMAP/POP3/ManageSieve), spam filtering configuration,
-        autoresponder status, footer settings, allowlists/denylists, and security policies. Use this
-        resource for detailed mailbox inspection, troubleshooting, and configuration verification.
-
-        URI Format: mailbox://example.org/username
-        """
-        email_address = f"{local_part}@{domain}"
-        await ctx.info(f"📋 Loading detailed configuration for: {email_address}")
-
-        try:
-            factory = get_service_factory()
-            service = factory.mailbox_service()
-            result = await service.get_mailbox(domain, local_part)
-            await ctx.info(f"✅ Loaded configuration for {email_address}")
-            return result
-        except Exception as e:
-            await ctx.error(
-                f"❌ Failed to load mailbox details for {email_address}: {str(e)}"
-            )
-            raise
+    ) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading mailbox {local_part}@{domain}")
+        return (
+            await get_service_factory()
+            .mailbox_service()
+            .get_mailbox(domain, local_part)
+        )
 
     @mcp.resource(
         "identities://{domain}/{mailbox}",
         name="Mailbox Identities",
-        description="Send-as email addresses and permissions for a mailbox",
+        description="Send-as identities configured for a mailbox",
         mime_type="application/json",
-        tags={"identity", "mailbox", "permissions", "send-as"},
+        tags={"identity", "mailbox"},
     )
     async def mailbox_identities(
         domain: str, mailbox: str, ctx: Context
-    ) -> Dict[str, Any]:
-        """Resource providing all email identities (send-as addresses) configured for a specific mailbox.
-        Shows additional email addresses the mailbox user can send from, each with their own permissions,
-        display names, and access controls. Use this resource to audit send-as capabilities and manage
-        role-based email address permissions within an organization.
-
-        URI Format: identities://example.org/username
-        """
-        await ctx.info(f"📋 Loading identities for mailbox: {mailbox}@{domain}")
-
-        try:
-            factory = get_service_factory()
-            service = factory.identity_service()
-            result = await service.list_identities(domain, mailbox)
-            count = len(result.get("identities", []))
-            await ctx.info(f"✅ Loaded {count} identities for {mailbox}@{domain}")
-            return result
-        except Exception as e:
-            await ctx.error(
-                f"❌ Failed to load identities for {mailbox}@{domain}: {str(e)}"
-            )
-            raise
+    ) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading identities for {mailbox}@{domain}")
+        return (
+            await get_service_factory()
+            .identity_service()
+            .list_identities(domain, mailbox)
+        )
 
     @mcp.resource(
         "forwardings://{domain}/{mailbox}",
         name="Mailbox Forwardings",
-        description="External forwarding rules and confirmation status for a mailbox",
+        description="External forwardings configured for a mailbox",
         mime_type="application/json",
-        tags={"forwarding", "mailbox", "external", "routing"},
+        tags={"forwarding", "mailbox"},
     )
     async def mailbox_forwardings(
         domain: str, mailbox: str, ctx: Context
-    ) -> Dict[str, Any]:
-        """Resource providing all external forwarding rules configured for a specific mailbox. Shows
-        destination addresses, confirmation status, expiration settings, and active state for each
-        forwarding rule. Use this resource to audit external message routing, verify forwarding
-        confirmations, and manage temporary or scheduled forwarding arrangements.
-
-        URI Format: forwardings://example.org/username
-        """
-        await ctx.info(f"📋 Loading forwarding rules for mailbox: {mailbox}@{domain}")
-
-        try:
-            factory = get_service_factory()
-            service = factory.mailbox_service()
-            result = await service.list_forwardings(domain, mailbox)
-            count = len(result.get("forwardings", []))
-            await ctx.info(f"✅ Loaded {count} forwarding rules for {mailbox}@{domain}")
-            return result
-        except Exception as e:
-            await ctx.error(
-                f"❌ Failed to load forwardings for {mailbox}@{domain}: {str(e)}"
-            )
-            raise
+    ) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading forwardings for {mailbox}@{domain}")
+        return (
+            await get_service_factory()
+            .forwarding_service()
+            .list_forwardings(domain, mailbox)
+        )
 
     @mcp.resource(
         "aliases://{domain}",
         name="Domain Aliases",
-        description="Overview of all email aliases and forwarding rules for a domain",
+        description="All aliases for a domain",
         mime_type="application/json",
-        tags={"alias", "domain", "forwarding", "routing"},
+        tags={"alias", "domain"},
     )
-    async def domain_aliases(domain: str, ctx: Context) -> Dict[str, Any]:
-        """Resource providing comprehensive overview of all email aliases configured for a domain.
-        Shows forwarding addresses that redirect messages without storage, including destination
-        addresses, internal-only status, and routing configuration. Use this resource for domain-wide
-        forwarding audits, distribution list management, and email routing infrastructure analysis.
+    async def domain_aliases(domain: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading aliases for {domain}")
+        return await get_service_factory().alias_service().list_aliases(domain)
 
-        URI Format: aliases://example.org
-        """
-        await ctx.info(f"📋 Loading alias inventory for domain: {domain}")
+    @mcp.resource(
+        "rewrites://{domain}",
+        name="Domain Rewrites",
+        description="All pattern-based rewrite rules for a domain",
+        mime_type="application/json",
+        tags={"rewrite", "domain"},
+    )
+    async def domain_rewrites(domain: str, ctx: Context) -> dict[str, Any]:
+        await ctx.info(f"📋 Loading rewrites for {domain}")
+        return await get_service_factory().rewrite_service().list_rewrites(domain)
 
-        try:
-            factory = get_service_factory()
-            service = factory.alias_service()
-            result = await service.list_aliases(domain)
-            count = len(result.get("aliases", []))
-            await ctx.info(f"✅ Loaded {count} aliases for {domain}")
-            return result
-        except Exception as e:
-            await ctx.error(f"❌ Failed to load aliases for {domain}: {str(e)}")
-            raise
-
-    @mcp.resource("rewrites://{domain}")
-    async def domain_rewrites(domain: str) -> Dict[str, Any]:
-        """Resource providing all pattern-based rewrite rules configured for a domain. Shows wildcard
-        patterns, destination addresses, processing order, and rule configuration for dynamic email
-        routing. Use this resource to audit pattern-based forwarding systems, verify rule precedence,
-        and manage complex email routing scenarios that require wildcard matching.
-
-        URI Format: rewrites://example.org
-        """
-        factory = get_service_factory()
-        service = factory.rewrite_service()
-        return await service.list_rewrites(domain)
+    _ = (
+        all_domains,
+        domain_details,
+        domain_records,
+        domain_usage,
+        domain_mailboxes,
+        mailbox_details,
+        mailbox_identities,
+        mailbox_forwardings,
+        domain_aliases,
+        domain_rewrites,
+    )

@@ -1,354 +1,148 @@
-#!/usr/bin/env python3
-"""
-MCP tools for mailbox operations using List[Dict] + iterator pattern
-"""
+"""MCP tools for mailbox operations."""
 
-from typing import Dict, Any, List
-from fastmcp import FastMCP, Context
+from typing import Any
+
+from fastmcp import Context, FastMCP
+
 from migadu_mcp.services.service_factory import get_service_factory
-from migadu_mcp.utils.tool_helpers import (
-    with_context_protection,
-    log_operation_start,
-    log_operation_success,
-    log_operation_error,
-)
-from migadu_mcp.utils.bulk_processing import (
-    bulk_processor_with_schema,
-    ensure_iterable,
-    log_bulk_operation_start,
-    log_bulk_operation_result,
-)
+from migadu_mcp.utils.decorators import migadu_bulk_tool, migadu_tool, resolve_domain
+from migadu_mcp.utils.email_parsing import format_email_address, parse_email_target
 from migadu_mcp.utils.schemas import (
+    AutoresponderRequest,
     MailboxCreateRequest,
-    MailboxUpdateRequest,
     MailboxDeleteRequest,
     MailboxPasswordResetRequest,
-    AutoresponderRequest,
+    MailboxUpdateRequest,
 )
-from migadu_mcp.utils.email_parsing import parse_email_target, format_email_address
 
 
-def register_mailbox_tools(mcp: FastMCP):
-    """Register mailbox tools using List[Dict] + iterator pattern"""
+def register_mailbox_tools(mcp: FastMCP) -> None:
+    @migadu_tool(mcp, read_only=True, summarize_response=True)
+    async def list_mailboxes(ctx: Context, domain: str | None = None) -> dict[str, Any]:
+        """List email mailboxes for a domain."""
+        resolved = resolve_domain(domain)
+        await ctx.info(f"📋 Listing mailboxes for {resolved}")
+        return await get_service_factory().mailbox_service().list_mailboxes(resolved)
 
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": True,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
-    @with_context_protection(max_tokens=2000)
-    async def list_mailboxes(ctx: Context, domain: str | None = None) -> Dict[str, Any]:
-        """List email mailboxes for domain. Returns summary with statistics and samples.
-
-        Args:
-            domain: Domain name. Uses MIGADU_DOMAIN if not provided.
-
-        Returns:
-            JSON object with mailbox summary and statistics
-        """
-        if domain is None:
-            from migadu_mcp.config import get_config
-
-            config = get_config()
-            domain = config.get_default_domain()
-            if not domain:
-                raise ValueError("No domain provided and MIGADU_DOMAIN not configured")
-
-        await log_operation_start(ctx, "Listing mailboxes", domain)
-        try:
-            service = get_service_factory().mailbox_service()
-            result = await service.list_mailboxes(domain)
-            count = len(result.get("mailboxes", []))
-            await log_operation_success(ctx, "Listed mailboxes", domain, count)
-            return result
-        except Exception as e:
-            await log_operation_error(ctx, "List mailboxes", domain, str(e))
-            raise
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": True,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
-    async def get_mailbox(target: str, ctx: Context) -> Dict[str, Any]:
-        """Get detailed mailbox information with smart domain resolution.
-
-        Args:
-            target: Email address or local part if MIGADU_DOMAIN set
-
-        Returns:
-            JSON object with complete mailbox configuration
-        """
-        try:
-            parsed = parse_email_target(target)
-            domain, local_part = parsed[0]
-            email_address = format_email_address(domain, local_part)
-
-            await log_operation_start(ctx, "Retrieving mailbox details", email_address)
-            service = get_service_factory().mailbox_service()
-            result = await service.get_mailbox(domain, local_part)
-            await log_operation_success(ctx, "Retrieved mailbox details", email_address)
-            return result
-        except Exception as e:
-            await log_operation_error(ctx, "Get mailbox", str(target), str(e))
-            raise
-
-    @bulk_processor_with_schema(MailboxCreateRequest)
-    async def process_create_mailbox(
-        validated_item: MailboxCreateRequest, ctx: Context
-    ) -> Dict[str, Any]:
-        """Process a single mailbox creation with Pydantic validation"""
-        # Use validated Pydantic model directly - all validation already done
-        target = validated_item.target
-        name = validated_item.name
-        password = validated_item.password
-        password_recovery_email = validated_item.password_recovery_email
-        is_internal = validated_item.is_internal
-        forwarding_to = validated_item.forwarding_to
-
-        # Parse target
-        parsed = parse_email_target(target)
-        domain, local_part = parsed[0]
-        email_address = format_email_address(domain, local_part)
-
-        await log_operation_start(ctx, "Creating mailbox", f"{email_address} ({name})")
-
-        service = get_service_factory().mailbox_service()
-        result = await service.create_mailbox(
-            domain,
-            local_part,
-            name,
-            password,
-            password_recovery_email,
-            is_internal,
-            forwarding_to,
+    @migadu_tool(mcp, read_only=True)
+    async def get_mailbox(target: str, ctx: Context) -> dict[str, Any]:
+        """Get full mailbox details by email or local part."""
+        domain, local_part = parse_email_target(target)[0]
+        await ctx.info(f"📋 Getting mailbox {format_email_address(domain, local_part)}")
+        return (
+            await get_service_factory()
+            .mailbox_service()
+            .get_mailbox(domain, local_part)
         )
 
-        await log_operation_success(ctx, "Created mailbox", email_address)
-        if forwarding_to:
-            await ctx.info(f"🔄 Configured forwarding to: {forwarding_to}")
-        if is_internal:
-            await ctx.info("🔒 Configured as internal-only mailbox")
-
-        return {"mailbox": result, "email_address": email_address, "success": True}
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": False,
-            "idempotentHint": False,
-            "openWorldHint": True,
-        },
-    )
+    @migadu_bulk_tool(mcp, MailboxCreateRequest, entity="mailbox", idempotent=False)
     async def create_mailbox(
-        mailboxes: List[Dict[str, Any]], ctx: Context
-    ) -> Dict[str, Any]:
-        """Create email mailboxes. List of dicts with: target (email/local), name (display), password (optional), recovery_email (optional), is_internal (optional), forwarding_to (optional)."""
-        count = len(list(ensure_iterable(mailboxes)))
-        await log_bulk_operation_start(ctx, "Creating", count, "mailbox")
-
-        result = await process_create_mailbox(mailboxes, ctx)
-        await log_bulk_operation_result(ctx, "Mailbox creation", result, "mailbox")
-        return result
-
-    @bulk_processor_with_schema(MailboxUpdateRequest)
-    async def process_update_mailbox(
-        validated_item: MailboxUpdateRequest, ctx: Context
-    ) -> Dict[str, Any]:
-        """Process a single mailbox update with Pydantic validation"""
-        # Use validated Pydantic model directly - all validation already done
-        target = validated_item.target
-        name = validated_item.name
-        may_send = validated_item.may_send
-        may_receive = validated_item.may_receive
-        may_access_imap = validated_item.may_access_imap
-        may_access_pop3 = validated_item.may_access_pop3
-        spam_action = validated_item.spam_action
-        spam_aggressiveness = validated_item.spam_aggressiveness
-
-        # Parse target
-        parsed = parse_email_target(target)
-        domain, local_part = parsed[0]
-        email_address = format_email_address(domain, local_part)
-
-        await log_operation_start(ctx, "Updating mailbox", email_address)
-
-        service = get_service_factory().mailbox_service()
-        result = await service.update_mailbox(
-            domain,
-            local_part,
-            name,
-            may_send,
-            may_receive,
-            may_access_imap,
-            may_access_pop3,
-            spam_action,
-            spam_aggressiveness,
+        item: MailboxCreateRequest, ctx: Context
+    ) -> dict[str, Any]:
+        """Create mailbox(es). List of dicts with: target, name, password or password_recovery_email, is_internal (optional), forwarding_to (optional)."""
+        domain, local_part = parse_email_target(item.target)[0]
+        email = format_email_address(domain, local_part)
+        await ctx.info(f"📋 Creating mailbox {email}")
+        result = (
+            await get_service_factory()
+            .mailbox_service()
+            .create_mailbox(
+                domain=domain,
+                local_part=local_part,
+                name=item.name,
+                password=item.password,
+                password_recovery_email=item.password_recovery_email,
+                is_internal=item.is_internal,
+                forwarding_to=item.forwarding_to,
+            )
         )
+        return {"mailbox": result, "email_address": email, "success": True}
 
-        await log_operation_success(ctx, "Updated mailbox", email_address)
-        return {"mailbox": result, "email_address": email_address, "success": True}
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
+    @migadu_bulk_tool(mcp, MailboxUpdateRequest, entity="mailbox")
     async def update_mailbox(
-        updates: List[Dict[str, Any]], ctx: Context
-    ) -> Dict[str, Any]:
-        """Update mailbox settings. List of dicts with: target (required), name (optional), may_send (optional), may_receive (optional), may_access_imap (optional), may_access_pop3 (optional), spam_action (optional), spam_aggressiveness (optional)."""
-        count = len(list(ensure_iterable(updates)))
-        await log_bulk_operation_start(ctx, "Updating", count, "mailbox")
+        item: MailboxUpdateRequest, ctx: Context
+    ) -> dict[str, Any]:
+        """Update mailbox settings. List of dicts with: target (required) and any of: name, may_send, may_receive, may_access_imap, may_access_pop3, may_access_managesieve, spam_action, spam_aggressiveness, sender_denylist, sender_allowlist, recipient_denylist."""
+        domain, local_part = parse_email_target(item.target)[0]
+        email = format_email_address(domain, local_part)
+        await ctx.info(f"📋 Updating mailbox {email}")
+        result = (
+            await get_service_factory()
+            .mailbox_service()
+            .update_mailbox(
+                domain=domain,
+                local_part=local_part,
+                name=item.name,
+                may_send=item.may_send,
+                may_receive=item.may_receive,
+                may_access_imap=item.may_access_imap,
+                may_access_pop3=item.may_access_pop3,
+                may_access_managesieve=item.may_access_managesieve,
+                spam_action=item.spam_action,
+                spam_aggressiveness=item.spam_aggressiveness,
+                sender_denylist=item.sender_denylist,
+                sender_allowlist=item.sender_allowlist,
+                recipient_denylist=item.recipient_denylist,
+            )
+        )
+        return {"mailbox": result, "email_address": email, "success": True}
 
-        result = await process_update_mailbox(updates, ctx)
-        await log_bulk_operation_result(ctx, "Mailbox update", result, "mailbox")
-        return result
-
-    @bulk_processor_with_schema(MailboxDeleteRequest)
-    async def process_delete_mailbox(
-        validated_item: MailboxDeleteRequest, ctx: Context
-    ) -> Dict[str, Any]:
-        """Process a single mailbox deletion with Pydantic validation"""
-        # Use validated Pydantic model directly - all validation already done
-        target = validated_item.target
-
-        # Parse target
-        parsed = parse_email_target(target)
-        domain, local_part = parsed[0]
-        email_address = format_email_address(domain, local_part)
-
-        await ctx.warning(f"🗑️ DESTRUCTIVE: Deleting mailbox {email_address}")
-
-        service = get_service_factory().mailbox_service()
-        await service.delete_mailbox(domain, local_part)
-
-        await log_operation_success(ctx, "Deleted mailbox", email_address)
-        return {"deleted": email_address, "success": True}
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": True,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
+    @migadu_bulk_tool(mcp, MailboxDeleteRequest, entity="mailbox", destructive=True)
     async def delete_mailbox(
-        targets: List[Dict[str, Any]], ctx: Context
-    ) -> Dict[str, Any]:
-        """Delete mailboxes. DESTRUCTIVE: Cannot be undone. List of dicts with: target (email/local)."""
-        count = len(list(ensure_iterable(targets)))
-        await log_bulk_operation_start(ctx, "Deleting", count, "mailbox")
-        await ctx.warning("🗑️ DESTRUCTIVE: This operation cannot be undone!")
+        item: MailboxDeleteRequest, ctx: Context
+    ) -> dict[str, Any]:
+        """Delete mailbox(es). DESTRUCTIVE. List of dicts with: target."""
+        domain, local_part = parse_email_target(item.target)[0]
+        email = format_email_address(domain, local_part)
+        await ctx.warning(f"🗑️ Deleting mailbox {email}")
+        await get_service_factory().mailbox_service().delete_mailbox(domain, local_part)
+        return {"deleted": email, "success": True}
 
-        result = await process_delete_mailbox(targets, ctx)
-        await log_bulk_operation_result(ctx, "Mailbox deletion", result, "mailbox")
-        return result
-
-    @bulk_processor_with_schema(MailboxPasswordResetRequest)
-    async def process_reset_password(
-        validated_item: MailboxPasswordResetRequest, ctx: Context
-    ) -> Dict[str, Any]:
-        """Process a single password reset with Pydantic validation"""
-        # Use validated Pydantic model directly - all validation already done
-        target = validated_item.target
-        new_password = validated_item.new_password
-
-        # Parse target
-        parsed = parse_email_target(target)
-        domain, local_part = parsed[0]
-        email_address = format_email_address(domain, local_part)
-
-        await log_operation_start(ctx, "Resetting password", email_address)
-
-        service = get_service_factory().mailbox_service()
-        await service.reset_mailbox_password(domain, local_part, new_password)
-
-        await log_operation_success(ctx, "Reset password", email_address)
-        return {"reset": email_address, "success": True}
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
+    @migadu_bulk_tool(mcp, MailboxPasswordResetRequest, entity="password reset")
     async def reset_mailbox_password(
-        resets: List[Dict[str, Any]], ctx: Context
-    ) -> Dict[str, Any]:
-        """Reset mailbox passwords. List of dicts with: target (email/local), new_password (required)."""
-        count = len(list(ensure_iterable(resets)))
-        await log_bulk_operation_start(ctx, "Resetting passwords for", count, "mailbox")
-
-        result = await process_reset_password(resets, ctx)
-        await log_bulk_operation_result(ctx, "Password reset", result, "mailbox")
-        return result
-
-    @bulk_processor_with_schema(AutoresponderRequest)
-    async def process_set_autoresponder(
-        validated_item: AutoresponderRequest, ctx: Context
-    ) -> Dict[str, Any]:
-        """Process a single autoresponder configuration with Pydantic validation"""
-        # Use validated Pydantic model directly - all validation already done
-        target = validated_item.target
-        active = validated_item.active
-        subject = validated_item.subject
-        body = validated_item.body
-        expires_on = (
-            validated_item.expires_on.isoformat() if validated_item.expires_on else None
+        item: MailboxPasswordResetRequest, ctx: Context
+    ) -> dict[str, Any]:
+        """Reset mailbox password(s). List of dicts with: target, new_password."""
+        domain, local_part = parse_email_target(item.target)[0]
+        email = format_email_address(domain, local_part)
+        await ctx.info(f"📋 Resetting password for {email}")
+        await (
+            get_service_factory()
+            .mailbox_service()
+            .reset_mailbox_password(domain, local_part, item.new_password)
         )
+        return {"reset": email, "success": True}
 
-        # Parse target
-        parsed = parse_email_target(target)
-        domain, local_part = parsed[0]
-        email_address = format_email_address(domain, local_part)
-
-        status = "Enabling" if active else "Disabling"
-        await log_operation_start(ctx, f"{status} autoresponder", email_address)
-
-        service = get_service_factory().mailbox_service()
-        result = await service.set_autoresponder(
-            domain, local_part, active, subject, body, expires_on
-        )
-
-        await log_operation_success(
-            ctx, f"{status.lower()} autoresponder", email_address
-        )
-        return {
-            "autoresponder": result,
-            "email_address": email_address,
-            "success": True,
-        }
-
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": False,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
+    @migadu_bulk_tool(mcp, AutoresponderRequest, entity="autoresponder")
     async def set_autoresponder(
-        autoresponders: List[Dict[str, Any]], ctx: Context
-    ) -> Dict[str, Any]:
-        """Configure mailbox autoresponders. List of dicts with: target (email/local), active (required), subject (optional), body (optional), expires_on (optional)."""
-        count = len(list(ensure_iterable(autoresponders)))
-        await log_bulk_operation_start(
-            ctx, "Configuring autoresponders for", count, "mailbox"
+        item: AutoresponderRequest, ctx: Context
+    ) -> dict[str, Any]:
+        """Configure autoresponder(s). List of dicts with: target, active, subject (optional), body (optional), expires_on (optional, YYYY-MM-DD)."""
+        domain, local_part = parse_email_target(item.target)[0]
+        email = format_email_address(domain, local_part)
+        state = "enabling" if item.active else "disabling"
+        await ctx.info(f"📋 {state.title()} autoresponder for {email}")
+        result = (
+            await get_service_factory()
+            .mailbox_service()
+            .set_autoresponder(
+                domain=domain,
+                local_part=local_part,
+                active=item.active,
+                subject=item.subject,
+                body=item.body,
+                expires_on=item.expires_on.isoformat() if item.expires_on else None,
+            )
         )
+        return {"autoresponder": result, "email_address": email, "success": True}
 
-        result = await process_set_autoresponder(autoresponders, ctx)
-        await log_bulk_operation_result(
-            ctx, "Autoresponder configuration", result, "mailbox"
-        )
-        return result
+    # Silence unused-variable warnings — decorators register with mcp on evaluation.
+    _ = (
+        list_mailboxes,
+        get_mailbox,
+        create_mailbox,
+        update_mailbox,
+        delete_mailbox,
+        reset_mailbox_password,
+        set_autoresponder,
+    )

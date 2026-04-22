@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "migadu-mcp"
 dynamic = ["version"]
-description = "Professional FastMCP server for comprehensive Migadu email management with Context logging, tool annotations, and testing infrastructure"
+description = "MCP server for Migadu email hosting — manage domains, mailboxes, aliases, identities, forwardings, and rewrites."
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
-    { name = "Michael Broel", email = "Michael@Michaelzag.com" }
+    { name = "Michael Broel", email = "michael@michaelzag.com" }
 ]
 license = { text = "MIT" }
-keywords = ["migadu", "email", "mcp", "server", "mailbox", "alias", "identity"]
+keywords = ["migadu", "email", "mcp", "server", "domain", "mailbox", "alias", "identity", "forwarding"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -34,10 +34,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff>=0.8.0",
-    "mypy>=1.0.0",
+    "ty>=0.0.1a5",
     "python-dotenv>=1.0.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "respx>=0.22.0",
     "bandit>=1.7.0",
     "setuptools_scm>=8.0.0",
 ]
@@ -64,3 +65,14 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: mark test as integration test (requires valid credentials)"
 ]
+
+[tool.ty.src]
+include = ["migadu_mcp"]
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+unresolved-import = "error"
+invalid-argument-type = "error"
+invalid-return-type = "error"

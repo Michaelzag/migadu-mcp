@@ -1,66 +1,91 @@
-#!/usr/bin/env python3
-"""
-Migadu MCP Server - Comprehensive email management for Migadu domains
-"""
+"""Migadu MCP server — comprehensive email management for Migadu domains."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastmcp import FastMCP
-from migadu_mcp.tools.mailbox_tools import register_mailbox_tools
-from migadu_mcp.tools.identity_tools import register_identity_tools
+
+from migadu_mcp.services.service_factory import reset_service_factory
 from migadu_mcp.tools.alias_tools import register_alias_tools
-from migadu_mcp.tools.rewrite_tools import register_rewrite_tools
+from migadu_mcp.tools.domain_tools import register_domain_tools
+from migadu_mcp.tools.forwarding_tools import register_forwarding_tools
+from migadu_mcp.tools.identity_tools import register_identity_tools
+from migadu_mcp.tools.mailbox_tools import register_mailbox_tools
 from migadu_mcp.tools.resource_tools import register_resources
+from migadu_mcp.tools.rewrite_tools import register_rewrite_tools
 
 
-# Initialize FastMCP server
-mcp: FastMCP = FastMCP("Migadu Mailbox Manager")
+@asynccontextmanager
+async def _lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
+    """Close the shared HTTP client when the server shuts down."""
+    try:
+        yield
+    finally:
+        await reset_service_factory()
 
 
-def initialize_server():
-    """Initialize the MCP server with all tools and resources"""
-    # Register all tools
+mcp: FastMCP = FastMCP("Migadu Mailbox Manager", lifespan=_lifespan)
+
+
+def initialize_server() -> None:
+    register_domain_tools(mcp)
     register_mailbox_tools(mcp)
     register_identity_tools(mcp)
     register_alias_tools(mcp)
     register_rewrite_tools(mcp)
+    register_forwarding_tools(mcp)
     register_resources(mcp)
 
-    # Add prompts
     @mcp.prompt
     def mailbox_creation_wizard(domain: str, user_requirements: str) -> str:
-        """Generate a step-by-step plan for creating mailboxes based on requirements"""
-        return f"""
-Please help me create mailboxes for domain {domain} based on these requirements:
+        """Generate a step-by-step plan for creating mailboxes based on requirements."""
+        return f"""Plan mailbox creation for {domain} based on these requirements:
 {user_requirements}
 
-Consider the following options:
-1. Basic mailbox with password
-2. Mailbox with invitation email for user to set password
-3. Internal-only mailbox (no external email reception)
-4. Mailbox with automatic forwarding
-5. Mailbox with specific permissions (IMAP, POP3, etc.)
+Options to consider:
+1. Password-based (immediate setup) vs invitation (user sets their own password)
+2. Internal-only mailboxes (restricted to Migadu's internal routing)
+3. Auto-forwarding at creation time (use forwarding_to)
+4. Protocol access (IMAP, POP3, ManageSieve)
 
-Provide a detailed plan with the specific create_mailbox commands needed.
+Return the concrete create_mailbox commands to run.
 """
 
     @mcp.prompt
     def bulk_operation_planner(domain: str, operation_type: str, targets: str) -> str:
-        """Plan bulk operations for multiple mailboxes or aliases"""
-        return f"""
-Help me plan a bulk {operation_type} operation for domain {domain}.
+        """Plan a bulk operation across multiple resources."""
+        return f"""Plan a bulk {operation_type} on {domain}.
 Targets: {targets}
 
-Provide step-by-step commands and consider:
-1. Order of operations to avoid conflicts
-2. Error handling and rollback procedures
-3. Verification steps after completion
-4. Best practices for the specific operation type
+Consider:
+1. Order of operations to avoid conflicts (create identities after mailboxes, etc.)
+2. Rollback strategy for partial failures
+3. Verification via list/get after each batch
+4. Destructive operations (delete) should be explicit
 
-Generate the specific tool commands needed.
+Return the concrete tool commands.
+"""
+
+    @mcp.prompt
+    def domain_onboarding(domain: str) -> str:
+        """Walk through onboarding a new Migadu domain end-to-end."""
+        return f"""Onboard domain {domain}:
+
+1. `create_domain` with `hosted_dns: false` and `create_default_addresses: true`
+2. `get_domain_records` to fetch the DNS records you need to configure at your DNS host
+3. Configure the MX, SPF, DKIM, DMARC, and verification records externally
+4. `get_domain_diagnostics` to check DNS propagation
+5. `activate_domain` once diagnostics pass (will 422 if DNS is not ready)
+6. `get_domain_usage` to verify the domain is live and track metrics
+
+Return the specific commands with real values.
 """
 
 
-def main():
-    """Entry point for the console script"""
+def main() -> None:
+    """Entry point for the console script."""
     initialize_server()
     mcp.run()
 
